@@ -3,6 +3,11 @@
 ベース URL: `http://localhost:8080`
 フロントエンド経由の場合: `http://localhost`（Nginx が `/api/*` と `/health` をプロキシ）
 
+> **Swagger UI** でインタラクティブに確認・実行することもできます:
+> - `http://localhost/swagger-ui.html`（Docker Compose 起動時）
+> - `http://localhost:8080/swagger-ui.html`（バックエンド単体起動時）
+> - OpenAPI JSON: `http://localhost:8080/v3/api-docs`
+
 ---
 
 ## 目次
