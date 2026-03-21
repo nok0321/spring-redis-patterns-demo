@@ -1,0 +1,4 @@
+.run_playwright_tmp.bat
+node_modules/
+playwright-report/
+test-results/

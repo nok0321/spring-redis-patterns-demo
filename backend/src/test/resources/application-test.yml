@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: cache-service-test
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      cache-operations:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 5
+        failure-rate-threshold: 60
+        slow-call-rate-threshold: 80
+        slow-call-duration-threshold: 2s
+        wait-duration-in-open-state: 5s
+        permitted-number-of-calls-in-half-open-state: 3
+        minimum-number-of-calls: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        event-consumer-buffer-size: 10
+  retry:
+    instances:
+      default:
+        max-attempts: 2
+        wait-duration: 100ms
+        enable-exponential-backoff: false
+        retry-exceptions:
+          - java.lang.RuntimeException
+          - java.io.IOException
+  ratelimiter:
+    instances:
+      default:
+        limit-for-period: 1000
+        limit-refresh-period: 1s
+        timeout-duration: 100ms
+
+logging:
+  level:
+    com.example.cache: WARN
+    org.redisson: ERROR
+    org.testcontainers: WARN

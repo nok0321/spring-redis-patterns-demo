@@ -1,0 +1,83 @@
+spring:
+  application:
+    name: cache-service
+  threads:
+    virtual:
+      enabled: true
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: false
+
+server:
+  port: 8080
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  prometheus:
+    metrics:
+      export:
+        enabled: true
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      cache-operations:
+        sliding-window-type: TIME_BASED
+        sliding-window-size: 60
+        failure-rate-threshold: 60
+        slow-call-rate-threshold: 80
+        slow-call-duration-threshold: 2s
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 10
+        minimum-number-of-calls: 20
+        automatic-transition-from-open-to-half-open-enabled: true
+        event-consumer-buffer-size: 50
+  retry:
+    instances:
+      default:
+        max-attempts: 3
+        wait-duration: 500ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2.0
+        exponential-max-wait-duration: 10s
+        retry-exceptions:
+          - org.redisson.client.RedisConnectionException
+          - org.redisson.client.RedisTimeoutException
+          - java.io.IOException
+  ratelimiter:
+    instances:
+      default:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 100ms
+
+logging:
+  level:
+    com.example.cache: INFO
+    org.redisson: WARN
+
+demo:
+  features:
+    enabled: false
+
+cors:
+  # 許可するオリジン（カンマ区切り）。本番環境では環境変数で上書きすること。
+  # 例: CORS_ALLOWED_ORIGINS=https://app.example.com
+  allowed-origins: http://localhost:5173
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+
+# Dockerプロファイル時の追加設定（application.yml本体のredissonConfigが上書き）
+demo:
+  features:
+    enabled: true
