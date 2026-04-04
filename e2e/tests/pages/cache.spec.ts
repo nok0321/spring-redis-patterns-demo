@@ -66,6 +66,9 @@ test.describe('ValueEditor — プレーンテキスト保存', () => {
       const saveButton = page.getByRole('button', { name: /保存|save/i }).first();
       await saveButton.click();
 
+      // 保存完了のトーストを待つ（非同期保存の完了確認）
+      await expect(page.getByText('保存しました')).toBeVisible({ timeout: 5_000 });
+
       // エラーが表示されないこと（以前は JSON パースエラーになっていた）
       await expect(page.getByText(/JSON の形式が正しくありません/)).not.toBeVisible();
     }
