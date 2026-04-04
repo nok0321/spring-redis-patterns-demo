@@ -1,4 +1,5 @@
 import { useState, useCallback, type ReactNode } from 'react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Database, Lock, BarChart2, Settings, X, Eye,
@@ -6,7 +7,7 @@ import {
 } from 'lucide-react';
 import { usePolling } from '../../hooks/usePolling';
 import { healthApi } from '../../api/health';
-import { getBaseUrl, setBaseUrl } from '../../api/client';
+import { getBaseUrl, setBaseUrl, getApiKey, setApiKey } from '../../api/client';
 
 const navItems = [
   { to: '/',               icon: LayoutDashboard, label: 'ダッシュボード' },
@@ -42,8 +43,10 @@ function ConnectionBadge() {
 }
 
 function BaseUrlModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  const containerRef = useFocusTrap(isOpen, onClose);
   const [url, setUrl] = useState(getBaseUrl());
   const [urlError, setUrlError] = useState<string | null>(null);
+  const [apiKeyValue, setApiKeyValue] = useState(getApiKey());
 
   if (!isOpen) return null;
 
@@ -63,15 +66,16 @@ function BaseUrlModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
     }
     setUrlError(null);
     setBaseUrl(trimmed);
+    setApiKey(apiKeyValue.trim());
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div ref={containerRef} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="baseurl-dialog-title">
       <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-white font-semibold">接続設定</h3>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">
+          <h3 id="baseurl-dialog-title" className="text-white font-semibold">接続設定</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-white" aria-label="閉じる">
             <X size={18} />
           </button>
         </div>
@@ -85,6 +89,14 @@ function BaseUrlModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => voi
         />
         {urlError && <p className="text-red-400 text-xs mb-3">{urlError}</p>}
         {!urlError && <div className="mb-3" />}
+        <label className="block text-sm text-gray-300 mb-2">API Key <span className="text-gray-500 text-xs">（空 = 認証なし）</span></label>
+        <input
+          type="password"
+          value={apiKeyValue}
+          onChange={e => setApiKeyValue(e.target.value)}
+          placeholder="（省略可）"
+          className="w-full bg-gray-900 text-white border border-gray-700 rounded px-3 py-2 text-sm mb-4 focus:outline-none focus:border-blue-500"
+        />
         <div className="flex gap-3 justify-end">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-300 hover:text-white">キャンセル</button>
           <button onClick={handleSave} className="px-4 py-2 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded">保存</button>
@@ -108,7 +120,7 @@ export function AppShell({ children }: AppShellProps) {
         <div className="p-4 border-b border-gray-800">
           <h1 className="text-white font-bold text-lg">Redis Dashboard</h1>
         </div>
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-1" aria-label="メインナビゲーション">
           {navItems.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
