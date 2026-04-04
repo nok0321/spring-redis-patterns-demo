@@ -113,11 +113,119 @@ export const handlers = [
 
   http.get('/api/lock/metrics', () =>
     HttpResponse.json({
-      totalAcquired: 5,
-      totalReleased: 4,
-      totalFailed: 1,
-      currentlyHeld: 1,
-      locks: []
+      locks: {
+        'my-lock': {
+          attempts: 5, acquisitions: 4, timeouts: 1, releases: 4,
+          operationSuccesses: 3, operationFailures: 1,
+        },
+      },
+      timestamp: Date.now(),
     })
+  ),
+
+  http.post('/api/lock/check-status', () =>
+    HttpResponse.json({
+      lockKey: 'my-lock',
+      canAcquire: true,
+      currentlyLocked: false,
+      lockType: 'standard',
+      timestamp: Date.now(),
+    })
+  ),
+
+  http.post('/api/lock/acquire-fenced', () =>
+    HttpResponse.json({
+      lockKey: 'my-lock',
+      acquired: true,
+      fenceToken: 42,
+      timestamp: Date.now(),
+    })
+  ),
+
+  http.post('/api/lock/execute', () =>
+    HttpResponse.json({
+      lockKey: 'my-lock',
+      success: true,
+      result: 'executed',
+      timestamp: Date.now(),
+    })
+  ),
+
+  http.get('/api/lock/status', () =>
+    HttpResponse.json({
+      lockKey: 'my-lock',
+      locked: false,
+      timestamp: Date.now(),
+    })
+  ),
+
+  http.post('/api/lock/transfer', () =>
+    HttpResponse.json({
+      transferId: 'txn-001',
+      success: true,
+      fromKey: 'account:A',
+      toKey: 'account:B',
+      amount: 100,
+      timestamp: Date.now(),
+    })
+  ),
+
+  http.post('/api/lock/demo/run', () =>
+    HttpResponse.json({
+      withoutLock: {
+        initialValue: 10, expectedFinal: 6, actualFinal: 8,
+        lostUpdates: 2, correct: false,
+        events: [
+          { workerId: 1, step: 'READ', value: 10, relativeMs: 0 },
+          { workerId: 1, step: 'WRITE', value: 9, relativeMs: 5 },
+        ],
+      },
+      withLock: {
+        initialValue: 10, expectedFinal: 6, actualFinal: 6,
+        lostUpdates: 0, correct: true,
+        events: [
+          { workerId: 1, step: 'LOCK_ACQUIRED', value: 10, relativeMs: 0 },
+          { workerId: 1, step: 'WRITE', value: 9, relativeMs: 5 },
+          { workerId: 1, step: 'LOCK_RELEASED', value: 9, relativeMs: 10 },
+        ],
+      },
+      timestamp: Date.now(),
+    })
+  ),
+
+  http.get('/api/rate-limiter/status', () =>
+    HttpResponse.json({
+      availablePermissions: 8,
+      numberOfWaitingThreads: 0,
+      cyclePeriodMs: 1000,
+      limitForPeriod: 10,
+      timestamp: Date.now(),
+    })
+  ),
+
+  http.post('/api/transaction/saga-fail', () =>
+    HttpResponse.json({
+      steps: [
+        { name: 'ステップ1', status: 'SUCCESS', durationMs: 5, detail: 'ok' },
+        { name: 'ステップ2', status: 'FAILED', durationMs: 3, detail: 'error' },
+      ],
+      compensationSteps: [
+        { name: 'ステップ1補償', status: 'COMPENSATED', durationMs: 2, detail: 'rolled back' },
+      ],
+      overallStatus: 'COMPENSATED',
+      timestamp: Date.now(),
+    })
+  ),
+
+  http.post('/api/cache/batch', () =>
+    HttpResponse.json({ total: 2, successful: 2, failed: 0 })
+  ),
+
+  http.post('/api/cache/warmup', () =>
+    HttpResponse.json({ status: 'DONE', keys: 3 })
+  ),
+
+  http.get('/api/cache/type/:key', () =>
+    HttpResponse.json({ key: 'demo:greeting', type: 'string' })
   ),
 ]
