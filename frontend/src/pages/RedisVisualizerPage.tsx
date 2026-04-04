@@ -1,33 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { cacheApi } from '../api/cache';
 
-// ── color palette ──────────────────────────────────────────────
-const C = {
-  bg:      '#0d1117',
-  surface: '#161b22',
-  border:  '#30363d',
-  muted:   '#484f58',
-  text:    '#e6edf3',
-  dim:     '#8b949e',
-  green:   '#3fb950',
-  cyan:    '#39d0d0',
-  amber:   '#d29922',
-  red:     '#f85149',
-  purple:  '#a371f7',
-  blue:    '#58a6ff',
-  pink:    '#f778ba',
-  orange:  '#ffa657',
-};
-
+// ── types ────────────────────────────────────────────────────
 type RedisType = 'STRING' | 'LIST' | 'SET' | 'ZSET' | 'HASH' | 'STREAM';
 
-const TYPE_META: Record<RedisType, { label: string; color: string; icon: string }> = {
-  STRING: { label: 'STRING',     color: C.green,  icon: 'S' },
-  LIST:   { label: 'LIST',       color: C.blue,   icon: 'L' },
-  SET:    { label: 'SET',        color: C.purple, icon: '∅' },
-  ZSET:   { label: 'SORTED SET', color: C.amber,  icon: 'Z' },
-  HASH:   { label: 'HASH',       color: C.pink,   icon: 'H' },
-  STREAM: { label: 'STREAM',     color: C.orange, icon: '≋' },
+interface TypeMeta { label: string; icon: string; text: string; bg: string; border: string; bgSubtle: string }
+
+const TYPE_META: Record<RedisType, TypeMeta> = {
+  STRING: { label: 'STRING',     icon: 'S', text: 'text-redis-green',  bg: 'bg-redis-green',  border: 'border-redis-green',  bgSubtle: 'bg-redis-green/10' },
+  LIST:   { label: 'LIST',       icon: 'L', text: 'text-redis-blue',   bg: 'bg-redis-blue',   border: 'border-redis-blue',   bgSubtle: 'bg-redis-blue/10' },
+  SET:    { label: 'SET',        icon: '∅', text: 'text-redis-purple', bg: 'bg-redis-purple', border: 'border-redis-purple', bgSubtle: 'bg-redis-purple/10' },
+  ZSET:   { label: 'SORTED SET', icon: 'Z', text: 'text-redis-amber',  bg: 'bg-redis-amber',  border: 'border-redis-amber',  bgSubtle: 'bg-redis-amber/10' },
+  HASH:   { label: 'HASH',       icon: 'H', text: 'text-redis-pink',   bg: 'bg-redis-pink',   border: 'border-redis-pink',   bgSubtle: 'bg-redis-pink/10' },
+  STREAM: { label: 'STREAM',     icon: '≋', text: 'text-redis-orange', bg: 'bg-redis-orange', border: 'border-redis-orange', bgSubtle: 'bg-redis-orange/10' },
 };
 
 const CMD_DOCS: Record<RedisType, string[]> = {
@@ -39,12 +24,16 @@ const CMD_DOCS: Record<RedisType, string[]> = {
   STREAM: ['XADD key * field val', 'XRANGE key - +', 'XREAD COUNT 10 STREAMS key 0', 'XLEN key'],
 };
 
-interface KeyEntry {
-  key: string;
-  type: RedisType;
-  value: unknown;
-  ttl: number;
-}
+const TYPE_DESCRIPTIONS: Record<RedisType, string> = {
+  STRING: '文字列・JSON・カウンター',
+  LIST:   'キュー・スタック・履歴',
+  SET:    '重複なし集合・タグ',
+  ZSET:   'スコア付き順位・ランキング',
+  HASH:   'フィールド→値のマップ',
+  STREAM: 'イベントログ・MQ',
+};
+
+interface KeyEntry { key: string; type: RedisType; value: unknown; ttl: number }
 
 // ── type inference from raw value ──────────────────────────────
 function inferType(value: unknown): RedisType {
@@ -64,28 +53,27 @@ function byteSize(v: unknown): number {
 }
 
 // ── sub-components ────────────────────────────────────────────
-function Badge({ color, children }: { color: string; children: React.ReactNode }) {
+function Badge({ meta, children }: { meta: TypeMeta; children: React.ReactNode }) {
   return (
-    <span style={{
-      background: color + '22', color, border: `1px solid ${color}55`,
-      borderRadius: 4, padding: '1px 7px', fontSize: 11, fontWeight: 700,
-      letterSpacing: '0.05em', fontFamily: 'monospace',
-    }}>{children}</span>
+    <span className={`${meta.bgSubtle} ${meta.text} ${meta.border} border rounded px-1.5 py-px text-[11px] font-bold tracking-wide font-mono`}>
+      {children}
+    </span>
   );
 }
 
 function TTLBar({ ttl }: { ttl: number }) {
-  if (ttl === -1) return <span style={{ color: C.muted, fontSize: 12 }}>∞</span>;
+  if (ttl === -1) return <span className="text-redis-muted text-xs">∞</span>;
   const maxTTL = 3600;
   const pct = Math.max(0, Math.min(1, ttl / maxTTL));
-  const col = pct > 0.5 ? C.green : pct > 0.2 ? C.amber : C.red;
+  const colorClass = pct > 0.5 ? 'bg-redis-green' : pct > 0.2 ? 'bg-redis-amber' : 'bg-redis-red';
+  const textClass = pct > 0.5 ? 'text-redis-green' : pct > 0.2 ? 'text-redis-amber' : 'text-redis-red';
   const label = ttl < 60 ? `${ttl}s` : ttl < 3600 ? `${Math.floor(ttl / 60)}m ${ttl % 60}s` : `${Math.floor(ttl / 3600)}h ${Math.floor((ttl % 3600) / 60)}m`;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <div style={{ width: 60, height: 5, background: C.border, borderRadius: 3, overflow: 'hidden' }}>
-        <div style={{ width: `${pct * 100}%`, height: '100%', background: col, borderRadius: 3 }} />
+    <div className="flex items-center gap-1.5">
+      <div className="w-[60px] h-[5px] bg-redis-border rounded-sm overflow-hidden">
+        <div className={`h-full rounded-sm ${colorClass}`} style={{ width: `${pct * 100}%` }} />
       </div>
-      <span style={{ color: col, fontSize: 11, fontFamily: 'monospace' }}>{label}</span>
+      <span className={`${textClass} text-[11px] font-mono`}>{label}</span>
     </div>
   );
 }
@@ -97,49 +85,51 @@ function StringValue({ v }: { v: unknown }) {
   try { parsed = JSON.parse(str); } catch { /* not JSON */ }
   if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
     return (
-      <div style={{ background: C.bg, borderRadius: 6, padding: 10, fontSize: 12, fontFamily: 'monospace', lineHeight: 1.7 }}>
-        <span style={{ color: C.muted }}>{'{'}</span>
+      <div className="bg-redis-bg rounded-md p-2.5 text-xs font-mono leading-relaxed">
+        <span className="text-redis-muted">{'{'}</span>
         {Object.entries(parsed as Record<string, unknown>).map(([k, val]) => (
-          <div key={k} style={{ paddingLeft: 16 }}>
-            <span style={{ color: C.pink }}>"{k}"</span>
-            <span style={{ color: C.muted }}>: </span>
-            <span style={{ color: typeof val === 'number' ? C.orange : C.green }}>
+          <div key={k} className="pl-4">
+            <span className="text-redis-pink">&quot;{k}&quot;</span>
+            <span className="text-redis-muted">: </span>
+            <span className={typeof val === 'number' ? 'text-redis-orange' : 'text-redis-green'}>
               {typeof val === 'string' ? `"${val}"` : String(val)}
             </span>
           </div>
         ))}
-        <span style={{ color: C.muted }}>{'}'}</span>
+        <span className="text-redis-muted">{'}'}</span>
       </div>
     );
   }
   return (
-    <div style={{ background: C.bg, borderRadius: 6, padding: '8px 12px', fontFamily: 'monospace', fontSize: 13, color: C.green, wordBreak: 'break-all' }}>
-      "{str}"
+    <div className="bg-redis-bg rounded-md px-3 py-2 font-mono text-[13px] text-redis-green break-all">
+      &quot;{str}&quot;
     </div>
   );
 }
 
 function ListValue({ v }: { v: unknown[] }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+    <div className="flex flex-col gap-0.5">
       {v.map((item, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: C.bg, borderRadius: 5, padding: '5px 10px' }}>
-          <span style={{ color: C.muted, fontSize: 11, fontFamily: 'monospace', minWidth: 22, textAlign: 'right' }}>{i}</span>
-          <div style={{ width: 1, height: 16, background: C.border }} />
-          <span style={{ fontFamily: 'monospace', fontSize: 12, color: C.blue }}>{String(item)}</span>
+        <div key={i} className="flex items-center gap-2 bg-redis-bg rounded-[5px] px-2.5 py-1.5">
+          <span className="text-redis-muted text-[11px] font-mono min-w-[22px] text-right">{i}</span>
+          <div className="w-px h-4 bg-redis-border" />
+          <span className="font-mono text-xs text-redis-blue">{String(item)}</span>
         </div>
       ))}
-      <div style={{ fontSize: 11, color: C.muted, paddingTop: 2 }}>← HEAD &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; TAIL →</div>
+      <div className="text-[11px] text-redis-muted pt-0.5">{'← HEAD' + '\u00A0'.repeat(22) + 'TAIL →'}</div>
     </div>
   );
 }
 
 function HashValue({ v }: { v: Record<string, unknown> }) {
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '3px 0', background: C.bg, borderRadius: 6, overflow: 'hidden', fontFamily: 'monospace', fontSize: 12 }}>
+    <div className="grid grid-cols-[max-content_1fr] bg-redis-bg rounded-md overflow-hidden font-mono text-xs">
       {Object.entries(v).map(([k, val], i) => (
-        <><div key={k + '_k'} style={{ padding: '5px 12px', background: i % 2 ? C.surface : 'transparent', color: C.pink }}>{k}</div>
-          <div key={k + '_v'} style={{ padding: '5px 12px', background: i % 2 ? C.surface : 'transparent', color: C.text }}>{String(val)}</div></>
+        <div key={k} className="contents">
+          <div className={`px-3 py-1.5 text-redis-pink ${i % 2 ? 'bg-redis-surface' : ''}`}>{k}</div>
+          <div className={`px-3 py-1.5 text-redis-text ${i % 2 ? 'bg-redis-surface' : ''}`}>{String(val)}</div>
+        </div>
       ))}
     </div>
   );
@@ -178,7 +168,6 @@ export function RedisVisualizerPage() {
         setEntries([]);
         return;
       }
-      // Batch fetch values for up to 50 keys at once
       const chunks: string[][] = [];
       for (let i = 0; i < keys.length; i += 50) chunks.push(keys.slice(i, i + 50));
 
@@ -188,7 +177,6 @@ export function RedisVisualizerPage() {
         for (const [key, value] of Object.entries(res.results)) {
           allEntries.push({ key, type: inferType(value), value, ttl: -1 });
         }
-        // Keys with no value (Redisson internal / non-STRING type keys) are silently skipped
       }
       setEntries(allEntries);
       if (allEntries.length > 0 && !selected) {
@@ -226,7 +214,7 @@ export function RedisVisualizerPage() {
   const meta  = entry ? TYPE_META[entry.type] : null;
 
   const typeStats = (Object.keys(TYPE_META) as RedisType[]).map(t => ({
-    type: t, count: entries.filter(e => e.type === t).length, color: TYPE_META[t].color,
+    type: t, count: entries.filter(e => e.type === t).length, meta: TYPE_META[t],
   })).filter(x => x.count > 0);
 
   function execCmd(ev: React.FormEvent) {
@@ -240,81 +228,72 @@ export function RedisVisualizerPage() {
   const totalBytes = entries.reduce((a, e) => a + byteSize(e.value), 0);
 
   return (
-    <div style={{
-      height: '100%', background: C.bg, color: C.text,
-      fontFamily: "'JetBrains Mono','Fira Code','Cascadia Code',monospace",
-      display: 'flex', flexDirection: 'column',
-    }}>
+    <div className="h-full bg-redis-bg text-redis-text font-mono flex flex-col">
       {/* toolbar */}
-      <div style={{
-        background: C.surface, borderBottom: `1px solid ${C.border}`,
-        padding: '0 16px', display: 'flex', alignItems: 'center', gap: 10, height: 44,
-        flexShrink: 0,
-      }}>
-        <span style={{ color: C.red, fontWeight: 700, fontSize: 13, letterSpacing: '0.1em' }}>REDIS</span>
-        <span style={{ color: C.dim, fontSize: 12 }}>Visual Explorer</span>
-        <div style={{ flex: 1 }} />
-        <form onSubmit={e => { e.preventDefault(); loadKeys(pattern); }}
-          style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <div className="bg-redis-surface border-b border-redis-border px-4 flex items-center gap-2.5 h-11 shrink-0">
+        <span className="text-redis-red font-bold text-[13px] tracking-widest">REDIS</span>
+        <span className="text-redis-dim text-xs">Visual Explorer</span>
+        <div className="flex-1" />
+        <form onSubmit={e => { e.preventDefault(); loadKeys(pattern); }} className="flex gap-1.5 items-center">
           <input
             value={pattern} onChange={e => setPattern(e.target.value)}
             placeholder="pattern: *"
-            style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5, padding: '4px 10px', color: C.text, fontSize: 12, outline: 'none', width: 160, fontFamily: 'monospace' }}
+            className="bg-redis-bg border border-redis-border rounded-[5px] px-2.5 py-1 text-redis-text text-xs outline-none w-40 font-mono"
           />
-          <button type="submit" disabled={isLoading} style={{
-            background: C.green + '22', border: `1px solid ${C.green}55`, color: C.green,
-            borderRadius: 5, padding: '4px 12px', fontSize: 11, cursor: 'pointer', fontFamily: 'monospace',
-          }}>{isLoading ? '...' : 'SCAN'}</button>
+          <button type="submit" disabled={isLoading}
+            className="bg-redis-green/10 border border-redis-green/30 text-redis-green rounded-[5px] px-3 py-1 text-[11px] cursor-pointer font-mono">
+            {isLoading ? '...' : 'SCAN'}
+          </button>
         </form>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: C.green, boxShadow: `0 0 5px ${C.green}` }} />
-          <span style={{ fontSize: 11, color: C.dim }}>localhost:8080</span>
+        <div className="flex items-center gap-1.5">
+          <div className="w-[7px] h-[7px] rounded-full bg-redis-green shadow-[0_0_5px_#3fb950]" />
+          <span className="text-[11px] text-redis-dim">localhost:8080</span>
         </div>
       </div>
 
       {error && (
-        <div style={{ padding: '8px 16px', background: C.red + '22', borderBottom: `1px solid ${C.red}44`, color: C.red, fontSize: 12 }}>
+        <div className="px-4 py-2 bg-redis-red/10 border-b border-redis-red/25 text-redis-red text-xs">
           ⚠ {error}
         </div>
       )}
 
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      <div className="flex flex-1 overflow-hidden">
         {/* ── sidebar ── */}
-        <div style={{ width: 300, background: C.surface, borderRight: `1px solid ${C.border}`, display: 'flex', flexDirection: 'column', overflow: 'hidden', flexShrink: 0 }}>
+        <div className="w-[300px] bg-redis-surface border-r border-redis-border flex flex-col overflow-hidden shrink-0">
           {/* type filter */}
-          <div style={{ padding: '8px 12px', borderBottom: `1px solid ${C.border}`, display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-            <button onClick={() => setFilter('ALL')} style={{
-              background: filterType === 'ALL' ? C.border : 'transparent',
-              border: `1px solid ${filterType === 'ALL' ? C.muted : C.border}`,
-              color: filterType === 'ALL' ? C.text : C.dim,
-              borderRadius: 4, padding: '2px 7px', fontSize: 11, cursor: 'pointer', fontFamily: 'monospace',
-            }}>ALL ({entries.length})</button>
+          <div className="px-3 py-2 border-b border-redis-border flex gap-1.5 flex-wrap">
+            <button onClick={() => setFilter('ALL')}
+              className={`border rounded px-1.5 py-0.5 text-[11px] cursor-pointer font-mono ${
+                filterType === 'ALL'
+                  ? 'bg-redis-border border-redis-muted text-redis-text'
+                  : 'bg-transparent border-redis-border text-redis-dim'
+              }`}>ALL ({entries.length})</button>
             {typeStats.map(s => (
-              <button key={s.type} onClick={() => setFilter(s.type)} style={{
-                background: filterType === s.type ? s.color + '22' : 'transparent',
-                border: `1px solid ${filterType === s.type ? s.color : C.border}`,
-                color: filterType === s.type ? s.color : C.dim,
-                borderRadius: 4, padding: '2px 7px', fontSize: 11, cursor: 'pointer', fontFamily: 'monospace',
-              }}>{TYPE_META[s.type].icon} {s.count}</button>
+              <button key={s.type} onClick={() => setFilter(s.type)}
+                className={`border rounded px-1.5 py-0.5 text-[11px] cursor-pointer font-mono ${
+                  filterType === s.type
+                    ? `${s.meta.bgSubtle} ${s.meta.border} ${s.meta.text}`
+                    : 'bg-transparent border-redis-border text-redis-dim'
+                }`}>{TYPE_META[s.type].icon} {s.count}</button>
             ))}
           </div>
 
           {/* search */}
-          <div style={{ padding: '7px 10px', borderBottom: `1px solid ${C.border}` }}>
+          <div className="px-2.5 py-1.5 border-b border-redis-border">
             <input
               value={search} onChange={e => setSearch(e.target.value)}
               placeholder="🔍  key filter..."
-              style={{ width: '100%', background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5, padding: '4px 8px', color: C.text, fontSize: 12, outline: 'none', boxSizing: 'border-box', fontFamily: 'monospace' }}
+              className="w-full bg-redis-bg border border-redis-border rounded-[5px] px-2 py-1 text-redis-text text-xs outline-none box-border font-mono"
             />
           </div>
 
           {/* key list */}
-          <div style={{ overflowY: 'auto', flex: 1 }}>
+          <div className="overflow-y-auto flex-1">
             {isLoading && (
-              <div style={{ padding: 20, color: C.dim, fontSize: 12, textAlign: 'center' }}>Scanning...</div>
+              <div className="p-5 text-redis-dim text-xs text-center">Scanning...</div>
             )}
             {!isLoading && filtered.length === 0 && (
-              <div style={{ padding: 20, color: C.muted, fontSize: 12, textAlign: 'center' }}>
+              <div className="p-5 text-redis-muted text-xs text-center">
                 {entries.length === 0 ? 'キーなし — まずキーをセットしてください' : 'フィルター結果なし'}
               </div>
             )}
@@ -322,23 +301,23 @@ export function RedisVisualizerPage() {
               const m = TYPE_META[e.type];
               const active = e.key === selected;
               return (
-                <div key={e.key} onClick={() => setSelected(e.key)} style={{
-                  padding: '7px 12px', cursor: 'pointer',
-                  background: active ? m.color + '18' : 'transparent',
-                  borderLeft: `3px solid ${active ? m.color : 'transparent'}`,
-                  transition: 'all 0.12s',
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ color: m.color, fontSize: 10, fontWeight: 700, minWidth: 12 }}>{m.icon}</span>
-                    <span style={{ fontSize: 12, color: active ? C.text : C.dim, wordBreak: 'break-all', flex: 1 }}>{e.key}</span>
+                <div key={e.key} onClick={() => setSelected(e.key)}
+                  className={`px-3 py-1.5 cursor-pointer transition-all duration-[120ms] border-l-[3px] ${
+                    active
+                      ? `${m.bgSubtle} ${m.border}`
+                      : 'bg-transparent border-transparent'
+                  }`}>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`${m.text} text-[10px] font-bold min-w-[12px]`}>{m.icon}</span>
+                    <span className={`text-xs break-all flex-1 ${active ? 'text-redis-text' : 'text-redis-dim'}`}>{e.key}</span>
                     <button
                       onClick={ev => { ev.stopPropagation(); handleDelete(e.key); }}
                       disabled={isDeleting}
-                      style={{ background: 'transparent', border: 'none', color: C.muted, cursor: 'pointer', fontSize: 14, padding: '0 2px', lineHeight: 1 }}
+                      className="bg-transparent border-none text-redis-muted cursor-pointer text-sm px-0.5 leading-none"
                       title="削除"
                     >×</button>
                   </div>
-                  <div style={{ paddingLeft: 18 }}>
+                  <div className="pl-[18px]">
                     <TTLBar ttl={e.ttl} />
                   </div>
                 </div>
@@ -347,47 +326,48 @@ export function RedisVisualizerPage() {
           </div>
 
           {/* footer stats */}
-          <div style={{ padding: '7px 12px', borderTop: `1px solid ${C.border}`, fontSize: 11, color: C.dim }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Total keys</span><span style={{ color: C.text }}>{entries.length}</span>
+          <div className="px-3 py-1.5 border-t border-redis-border text-[11px] text-redis-dim">
+            <div className="flex justify-between">
+              <span>Total keys</span><span className="text-redis-text">{entries.length}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <div className="flex justify-between">
               <span>Memory (est.)</span>
-              <span style={{ color: C.text }}>{(totalBytes / 1024).toFixed(1)} KB</span>
+              <span className="text-redis-text">{(totalBytes / 1024).toFixed(1)} KB</span>
             </div>
           </div>
         </div>
 
         {/* ── detail panel ── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div className="flex-1 flex flex-col overflow-hidden">
           {entry && meta ? (
             <>
               {/* key header */}
-              <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: '9px 18px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-                <Badge color={meta.color}>{meta.label}</Badge>
-                <span style={{ fontSize: 13, color: C.text, wordBreak: 'break-all' }}>{entry.key}</span>
-                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 11, color: C.muted }}>TTL:</span>
+              <div className="bg-redis-surface border-b border-redis-border px-4 py-2.5 flex items-center gap-3 shrink-0">
+                <Badge meta={meta}>{meta.label}</Badge>
+                <span className="text-[13px] text-redis-text break-all">{entry.key}</span>
+                <div className="ml-auto flex items-center gap-2.5">
+                  <span className="text-[11px] text-redis-muted">TTL:</span>
                   <TTLBar ttl={entry.ttl} />
-                  <span style={{ fontSize: 11, color: C.muted }}>~{byteSize(entry.value)} bytes</span>
+                  <span className="text-[11px] text-redis-muted">~{byteSize(entry.value)} bytes</span>
                 </div>
               </div>
 
               {/* tabs */}
-              <div style={{ display: 'flex', borderBottom: `1px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
+              <div className="flex border-b border-redis-border bg-redis-surface shrink-0">
                 {(['value', 'commands', 'info'] as const).map(t => (
-                  <button key={t} onClick={() => setTab(t)} style={{
-                    padding: '7px 16px', fontSize: 12, cursor: 'pointer', background: 'transparent', border: 'none',
-                    borderBottom: tab === t ? `2px solid ${meta.color}` : '2px solid transparent',
-                    color: tab === t ? meta.color : C.dim, fontFamily: 'monospace',
-                  }}>{t.toUpperCase()}</button>
+                  <button key={t} onClick={() => setTab(t)}
+                    className={`px-4 py-1.5 text-xs cursor-pointer bg-transparent border-none font-mono border-b-2 ${
+                      tab === t
+                        ? `${meta.text} ${meta.border}`
+                        : 'text-redis-dim border-transparent'
+                    }`}>{t.toUpperCase()}</button>
                 ))}
               </div>
 
-              <div style={{ flex: 1, overflow: 'auto', padding: 18 }}>
+              <div className="flex-1 overflow-auto p-4">
                 {tab === 'value' && (
                   <>
-                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 10 }}>
+                    <div className="text-[11px] text-redis-muted mb-2.5">
                       {meta.label} — {
                         Array.isArray(entry.value) ? `${(entry.value as unknown[]).length} elements` :
                         typeof entry.value === 'object' && entry.value !== null ? `${Object.keys(entry.value).length} fields` :
@@ -400,39 +380,42 @@ export function RedisVisualizerPage() {
 
                 {tab === 'commands' && (
                   <div>
-                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>よく使うコマンド — {meta.label}</div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 20 }}>
+                    <div className="text-[11px] text-redis-muted mb-3">よく使うコマンド — {meta.label}</div>
+                    <div className="flex flex-col gap-1 mb-5">
                       {CMD_DOCS[entry.type].map((c, i) => (
-                        <div key={i} onClick={() => setCmd(c)} style={{
-                          background: C.bg, border: `1px solid ${C.border}`, borderRadius: 5,
-                          padding: '7px 12px', fontFamily: 'monospace', fontSize: 12, color: C.cyan, cursor: 'pointer',
-                        }}>{c}</div>
-                      ))}
-                    </div>
-                    <div style={{ fontSize: 11, color: C.muted, marginBottom: 6 }}>ターミナル (シミュレーション)</div>
-                    <div ref={cmdRef} style={{ background: C.bg, border: `1px solid ${C.border}`, borderRadius: 6, padding: 10, height: 140, overflowY: 'auto', marginBottom: 8 }}>
-                      {cmdOut.length === 0 && <span style={{ color: C.muted, fontSize: 11 }}>上のコマンドをクリックして実行...</span>}
-                      {cmdOut.map((o, i) => (
-                        <div key={i} style={{ marginBottom: 6 }}>
-                          <div style={{ color: C.green, fontSize: 12 }}>127.0.0.1:6379&gt; {o.input}</div>
-                          <div style={{ color: C.dim, fontSize: 12, paddingLeft: 4 }}>{o.out}</div>
+                        <div key={i} onClick={() => setCmd(c)}
+                          className="bg-redis-bg border border-redis-border rounded-[5px] px-3 py-1.5 font-mono text-xs text-redis-cyan cursor-pointer">
+                          {c}
                         </div>
                       ))}
                     </div>
-                    <form onSubmit={execCmd} style={{ display: 'flex', gap: 8 }}>
-                      <span style={{ color: C.green, fontSize: 12, alignSelf: 'center' }}>{'>'}</span>
+                    <div className="text-[11px] text-redis-muted mb-1.5">ターミナル (シミュレーション)</div>
+                    <div ref={cmdRef} className="bg-redis-bg border border-redis-border rounded-md p-2.5 h-[140px] overflow-y-auto mb-2">
+                      {cmdOut.length === 0 && <span className="text-redis-muted text-[11px]">上のコマンドをクリックして実行...</span>}
+                      {cmdOut.map((o, i) => (
+                        <div key={i} className="mb-1.5">
+                          <div className="text-redis-green text-xs">127.0.0.1:6379&gt; {o.input}</div>
+                          <div className="text-redis-dim text-xs pl-1">{o.out}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <form onSubmit={execCmd} className="flex gap-2">
+                      <span className="text-redis-green text-xs self-center">{'>'}</span>
                       <input
                         value={cmd} onChange={e => setCmd(e.target.value)}
                         placeholder="command..."
-                        style={{ flex: 1, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 4, padding: '5px 10px', color: C.text, fontSize: 12, outline: 'none', fontFamily: 'monospace' }}
+                        className="flex-1 bg-redis-bg border border-redis-border rounded px-2.5 py-1.5 text-redis-text text-xs outline-none font-mono"
                       />
-                      <button type="submit" style={{ background: meta.color + '22', border: `1px solid ${meta.color}55`, color: meta.color, borderRadius: 4, padding: '5px 12px', cursor: 'pointer', fontSize: 12, fontFamily: 'monospace' }}>RUN</button>
+                      <button type="submit"
+                        className={`${meta.bgSubtle} ${meta.border} ${meta.text} border rounded px-3 py-1.5 cursor-pointer text-xs font-mono`}>
+                        RUN
+                      </button>
                     </form>
                   </div>
                 )}
 
                 {tab === 'info' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div className="flex flex-col gap-1.5">
                     {([
                       ['Key',    entry.key],
                       ['Type',   entry.type],
@@ -440,9 +423,9 @@ export function RedisVisualizerPage() {
                       ['Memory', `~${byteSize(entry.value)} bytes (estimated)`],
                       ['Inferred', `value type: ${entry.type}`],
                     ] as [string, string][]).map(([label, val]) => (
-                      <div key={label} style={{ display: 'grid', gridTemplateColumns: '140px 1fr', background: C.bg, borderRadius: 5, overflow: 'hidden' }}>
-                        <div style={{ padding: '7px 12px', color: C.dim, fontSize: 12 }}>{label}</div>
-                        <div style={{ padding: '7px 12px', color: C.text, fontSize: 12, fontFamily: 'monospace', wordBreak: 'break-all' }}>{val}</div>
+                      <div key={label} className="grid grid-cols-[140px_1fr] bg-redis-bg rounded-[5px] overflow-hidden">
+                        <div className="px-3 py-1.5 text-redis-dim text-xs">{label}</div>
+                        <div className="px-3 py-1.5 text-redis-text text-xs font-mono break-all">{val}</div>
                       </div>
                     ))}
                   </div>
@@ -450,41 +433,37 @@ export function RedisVisualizerPage() {
               </div>
             </>
           ) : (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.muted, fontSize: 13 }}>
+            <div className="flex-1 flex items-center justify-center text-redis-muted text-[13px]">
               {isLoading ? 'スキャン中...' : '← キーを選択してください'}
             </div>
           )}
         </div>
 
         {/* ── right panel: data structures ── */}
-        <div style={{ width: 200, background: C.surface, borderLeft: `1px solid ${C.border}`, padding: 12, overflowY: 'auto', flexShrink: 0 }}>
-          <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, letterSpacing: '0.08em' }}>DATA STRUCTURES</div>
-          {(Object.entries(TYPE_META) as [RedisType, typeof TYPE_META[RedisType]][]).map(([type, m]) => {
+        <div className="w-[200px] bg-redis-surface border-l border-redis-border p-3 overflow-y-auto shrink-0">
+          <div className="text-[11px] text-redis-muted mb-2.5 tracking-wider">DATA STRUCTURES</div>
+          {(Object.entries(TYPE_META) as [RedisType, TypeMeta][]).map(([type, m]) => {
             const count = entries.filter(e => e.type === type).length;
             return (
-              <div key={type} onClick={() => { setFilter(type); setSelected(entries.find(e => e.type === type)?.key ?? null); }}
-                style={{
-                  marginBottom: 7, padding: '8px 9px', borderRadius: 6,
-                  background: filterType === type ? m.color + '18' : C.bg,
-                  border: `1px solid ${filterType === type ? m.color : C.border}`,
-                  cursor: 'pointer', transition: 'all 0.12s',
-                }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3 }}>
-                  <span style={{ color: m.color, fontWeight: 700, fontSize: 13 }}>{m.icon}</span>
-                  <span style={{ fontSize: 10, color: m.color, fontWeight: 700 }}>{m.label}</span>
-                  <span style={{ marginLeft: 'auto', fontSize: 11, color: C.dim }}>{count}</span>
+              <div key={type}
+                onClick={() => { setFilter(type); setSelected(entries.find(e => e.type === type)?.key ?? null); }}
+                className={`mb-1.5 p-2 rounded-md border cursor-pointer transition-all duration-[120ms] ${
+                  filterType === type
+                    ? `${m.bgSubtle} ${m.border}`
+                    : 'bg-redis-bg border-redis-border'
+                }`}>
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className={`${m.text} font-bold text-[13px]`}>{m.icon}</span>
+                  <span className={`text-[10px] ${m.text} font-bold`}>{m.label}</span>
+                  <span className="ml-auto text-[11px] text-redis-dim">{count}</span>
                 </div>
-                <div style={{ fontSize: 10, color: C.muted, lineHeight: 1.4 }}>
-                  {type === 'STRING' && '文字列・JSON・カウンター'}
-                  {type === 'LIST'   && 'キュー・スタック・履歴'}
-                  {type === 'SET'    && '重複なし集合・タグ'}
-                  {type === 'ZSET'   && 'スコア付き順位・ランキング'}
-                  {type === 'HASH'   && 'フィールド→値のマップ'}
-                  {type === 'STREAM' && 'イベントログ・MQ'}
+                <div className="text-[10px] text-redis-muted leading-snug">
+                  {TYPE_DESCRIPTIONS[type]}
                 </div>
                 {count > 0 && (
-                  <div style={{ marginTop: 4, height: 3, borderRadius: 2, background: m.color + '44', overflow: 'hidden' }}>
-                    <div style={{ width: `${Math.min(count / Math.max(entries.length, 1) * 100 * 3, 100)}%`, height: '100%', background: m.color }} />
+                  <div className={`mt-1 h-[3px] rounded-sm ${m.bg}/25 overflow-hidden`}>
+                    <div className={`h-full ${m.bg}`}
+                      style={{ width: `${Math.min(count / Math.max(entries.length, 1) * 100 * 3, 100)}%` }} />
                   </div>
                 )}
               </div>

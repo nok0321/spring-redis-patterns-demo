@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
 import { KeyPreviewCell } from './KeyPreviewCell';
 import { TtlProgressBar } from './TtlProgressBar';
 import { cacheApi } from '../../api/cache';
+import { usePolling } from '../../hooks/usePolling';
 
 interface TtlInfo {
   ttlMs: number;
@@ -26,28 +26,15 @@ export function KeyTable({
   onDelete,
 }: KeyTableProps) {
   const entries = Object.entries(results);
-  const [ttlMap, setTtlMap] = useState<Record<string, TtlInfo>>({});
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const keys = Object.keys(results);
 
-  useEffect(() => {
-    let cancelled = false;
-    const doFetch = async () => {
-      const keys = Object.keys(results);
-      if (keys.length === 0) return;
-      try {
-        const res = await cacheApi.getTtlBatch(keys);
-        if (!cancelled) setTtlMap(res.results);
-      } catch {
-        // TTL 取得失敗は無視
-      }
-    };
-    doFetch();
-    intervalRef.current = setInterval(doFetch, 10_000);
-    return () => {
-      cancelled = true;
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [results]);
+  const { data: ttlData } = usePolling<{ results: Record<string, TtlInfo> }>({
+    fetcher: () => cacheApi.getTtlBatch(keys),
+    interval: 10_000,
+    enabled: keys.length > 0,
+  });
+
+  const ttlMap = ttlData?.results ?? {};
 
   if (entries.length === 0) {
     return (

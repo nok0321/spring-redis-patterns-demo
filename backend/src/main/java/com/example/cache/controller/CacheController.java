@@ -16,8 +16,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import jakarta.annotation.PreDestroy;
-
 import java.time.Duration;
 import java.time.format.DateTimeParseException;
 import java.util.*;
@@ -25,7 +23,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -35,7 +32,7 @@ import java.util.concurrent.TimeoutException;
 public class CacheController {
 
     private static final Logger logger = LoggerFactory.getLogger(CacheController.class);
-    private final ExecutorService virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
+    private final ExecutorService virtualExecutor;
 
     private final ResilientCacheService cacheService;
     private final CircuitBreakerRegistry circuitBreakerRegistry;
@@ -47,16 +44,12 @@ public class CacheController {
 
     public CacheController(ResilientCacheService cacheService,
                            CircuitBreakerRegistry circuitBreakerRegistry,
-                           RedissonClient redissonClient) {
+                           RedissonClient redissonClient,
+                           ExecutorService virtualThreadExecutor) {
         this.cacheService = cacheService;
         this.circuitBreakerRegistry = circuitBreakerRegistry;
         this.redissonClient = redissonClient;
-    }
-
-    @PreDestroy
-    public void shutdown() {
-        logger.info("CacheController shutdown - terminating virtual executor");
-        virtualExecutor.shutdown();
+        this.virtualExecutor = virtualThreadExecutor;
     }
 
     @Operation(summary = "キャッシュ取得", description = "指定したキーの値を取得する。type パラメータで型を指定可能（String/Integer/Map 等）")
@@ -99,9 +92,9 @@ public class CacheController {
         }
 
         Set<String> keySet = new HashSet<>(Arrays.asList(keys.split(",")));
-        if (keySet.size() > BATCH_KEYS_MAX) {
+        if (keySet.size() > batchKeysMax) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "error", "Too many keys: max " + BATCH_KEYS_MAX + " allowed",
+                    "error", "Too many keys: max " + batchKeysMax + " allowed",
                     "timestamp", System.currentTimeMillis()));
         }
         Map<String, Object> results = cacheService.getBatch(keySet);
@@ -112,8 +105,11 @@ public class CacheController {
                 "results", results));
     }
 
-    private static final int SEARCH_LIMIT_MAX = 1000;
-    private static final int BATCH_KEYS_MAX = 500;
+    @Value("${cache.search-limit-max:1000}")
+    private int searchLimitMax;
+
+    @Value("${cache.batch-keys-max:500}")
+    private int batchKeysMax;
     /** Redis キーの最大バイト長 (UTF-8)。Redis の実装上限は 512MB だが API 上は 512 バイトを上限とする。 */
     private static final int KEY_MAX_BYTES = 512;
 
@@ -142,7 +138,7 @@ public class CacheController {
             @RequestParam(defaultValue = "*") String pattern,
             @RequestParam(defaultValue = "100") int limit) {
 
-        int safeLimit = Math.min(Math.max(limit, 1), SEARCH_LIMIT_MAX);
+        int safeLimit = Math.min(Math.max(limit, 1), searchLimitMax);
         Set<String> keys = cacheService.searchKeys(pattern, safeLimit);
 
         return ResponseEntity.ok(Map.of(
@@ -423,9 +419,9 @@ public class CacheController {
     public ResponseEntity<Map<String, Object>> getTtlBatch(
             @RequestParam String keys) {
         String[] keyArray = keys.split(",");
-        if (keyArray.length > BATCH_KEYS_MAX) {
+        if (keyArray.length > batchKeysMax) {
             return ResponseEntity.badRequest().body(Map.of(
-                    "error", "Too many keys: max " + BATCH_KEYS_MAX + " allowed",
+                    "error", "Too many keys: max " + batchKeysMax + " allowed",
                     "timestamp", System.currentTimeMillis()));
         }
         Map<String, Object> results = new ConcurrentHashMap<>();

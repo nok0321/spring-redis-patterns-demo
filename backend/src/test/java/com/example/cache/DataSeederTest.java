@@ -2,13 +2,14 @@ package com.example.cache;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
 
 import java.time.Duration;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -20,8 +21,12 @@ class DataSeederTest {
     @Mock
     RedissonClient redissonClient;
 
-    @InjectMocks
     DataSeeder dataSeeder;
+
+    @org.junit.jupiter.api.BeforeEach
+    void setUp() {
+        dataSeeder = new DataSeeder(redissonClient, Executors.newVirtualThreadPerTaskExecutor());
+    }
 
     @Test
     void seedDemoData_callsSetIfAbsentForAllKeys() {

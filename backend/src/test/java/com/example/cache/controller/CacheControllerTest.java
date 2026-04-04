@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -36,6 +37,9 @@ class CacheControllerTest {
 
     @MockitoBean
     RedissonClient redissonClient;
+
+    @MockitoBean
+    ExecutorService virtualThreadExecutor;
 
     // --- getCache ---
 

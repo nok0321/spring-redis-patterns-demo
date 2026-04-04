@@ -8,8 +8,8 @@ import type {
 } from '../types/locks';
 
 export const locksApi = {
-  acquire: (body: LockAcquireRequest) =>
-    apiFetch<LockAcquireResponse>('/api/lock/acquire', {
+  checkStatus: (body: LockAcquireRequest) =>
+    apiFetch<LockAcquireResponse>('/api/lock/check-status', {
       method: 'POST', body: JSON.stringify(body)
     }),
 
