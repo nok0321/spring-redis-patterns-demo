@@ -2,6 +2,7 @@ import { apiFetch } from './client';
 import type {
   LockAcquireRequest, LockAcquireResponse,
   LockExecuteRequest, FencedLockRequest,
+  FencedLockResponse, LockExecuteResponse,
   LockStatusResponse, LockMetricsResponse,
   TransferRequest, TransferResponse,
   LockDemoRunRequest, LockDemoResponse,
@@ -14,12 +15,12 @@ export const locksApi = {
     }),
 
   acquireFenced: (body: FencedLockRequest) =>
-    apiFetch<Record<string, unknown>>('/api/lock/acquire-fenced', {
+    apiFetch<FencedLockResponse>('/api/lock/acquire-fenced', {
       method: 'POST', body: JSON.stringify(body)
     }),
 
   execute: (body: LockExecuteRequest) =>
-    apiFetch<Record<string, unknown>>('/api/lock/execute', {
+    apiFetch<LockExecuteResponse>('/api/lock/execute', {
       method: 'POST', body: JSON.stringify(body)
     }),
 

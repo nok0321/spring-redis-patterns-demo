@@ -35,6 +35,18 @@ export interface FencedLockRequest {
   data?: Record<string, unknown>;
 }
 
+export interface FencedLockResponse {
+  lockKey: string;
+  acquired: boolean;
+  fencingToken: number | null;
+  timestamp: number;
+  [key: string]: unknown;
+}
+
+export interface LockExecuteResponse {
+  [key: string]: unknown;
+}
+
 export interface LockStatusResponse {
   lockKey: string;
   locked: boolean;

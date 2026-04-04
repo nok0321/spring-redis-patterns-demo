@@ -80,11 +80,8 @@ describe('DashboardPage', () => {
       hitRate: 75,
     })
     mockLocksMetrics.mockResolvedValue({
-      totalAcquired: 5,
-      totalReleased: 4,
-      totalFailed: 1,
-      currentlyHeld: 1,
-      locks: [],
+      locks: {},
+      timestamp: Date.now(),
     })
   })
 

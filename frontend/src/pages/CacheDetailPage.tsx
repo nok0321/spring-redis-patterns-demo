@@ -42,12 +42,16 @@ export function CacheDetailPage() {
   }, [decodedKey]);
 
   const handleSave = async (parsed: unknown) => {
-    await cacheApi.set(decodedKey, { value: parsed });
-    const refreshed = await cacheApi.get(decodedKey);
-    setEntry(refreshed);
-    setFetchedAt(new Date());
-    setIsEditing(false);
-    addToast('保存しました', 'success');
+    try {
+      await cacheApi.set(decodedKey, { value: parsed });
+      const refreshed = await cacheApi.get(decodedKey);
+      setEntry(refreshed);
+      setFetchedAt(new Date());
+      setIsEditing(false);
+      addToast('保存しました', 'success');
+    } catch (e) {
+      addToast(e instanceof Error ? e.message : '保存に失敗しました', 'error');
+    }
   };
 
   const handleDelete = async () => {
