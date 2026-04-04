@@ -55,10 +55,10 @@ export function AddKeyModal({ isOpen, onClose, onAdd }: AddKeyModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="addkey-dialog-title">
       <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-white font-semibold">新規キー追加</h3>
+          <h3 id="addkey-dialog-title" className="text-white font-semibold">新規キー追加</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-white">
             <X className="h-5 w-5" />
           </button>
@@ -66,8 +66,9 @@ export function AddKeyModal({ isOpen, onClose, onAdd }: AddKeyModalProps) {
 
         <div className="space-y-3">
           <div>
-            <label className="block text-xs text-gray-400 mb-1">キー</label>
+            <label htmlFor="addkey-key" className="block text-xs text-gray-400 mb-1">キー</label>
             <input
+              id="addkey-key"
               type="text"
               value={key}
               onChange={(e) => setKey(e.target.value)}
@@ -77,8 +78,9 @@ export function AddKeyModal({ isOpen, onClose, onAdd }: AddKeyModalProps) {
           </div>
 
           <div>
-            <label className="block text-xs text-gray-400 mb-1">値</label>
+            <label htmlFor="addkey-value" className="block text-xs text-gray-400 mb-1">値</label>
             <textarea
+              id="addkey-value"
               value={rawValue}
               onChange={(e) => setRawValue(e.target.value)}
               placeholder='{"userId": 1042, "name": "asdf"}'
@@ -88,8 +90,9 @@ export function AddKeyModal({ isOpen, onClose, onAdd }: AddKeyModalProps) {
           </div>
 
           <div>
-            <label className="block text-xs text-gray-400 mb-1">TTL（秒）</label>
+            <label htmlFor="addkey-ttl" className="block text-xs text-gray-400 mb-1">TTL（秒）</label>
             <input
+              id="addkey-ttl"
               type="number"
               value={ttl}
               onChange={(e) => setTtl(e.target.value)}

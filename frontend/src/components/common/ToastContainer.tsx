@@ -11,7 +11,7 @@ interface Props { toasts: ToastItem[] }
 
 export function ToastContainer({ toasts }: Props) {
   return (
-    <div className="fixed bottom-4 right-4 flex flex-col gap-2 z-50">
+    <div role="status" aria-live="polite" className="fixed bottom-4 right-4 flex flex-col gap-2 z-50">
       {toasts.map(t => (
         <div
           key={t.id}
