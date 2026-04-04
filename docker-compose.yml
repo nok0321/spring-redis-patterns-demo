@@ -23,6 +23,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - backend
 
   backend:
     build:
@@ -49,6 +51,10 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    networks:
+      - frontend
+      - backend
+      - monitoring
 
   frontend:
     build:
@@ -60,6 +66,8 @@ services:
     depends_on:
       backend:
         condition: service_healthy
+    networks:
+      - frontend
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.120.0
@@ -73,6 +81,9 @@ services:
     depends_on:
       - jaeger
       - loki
+    networks:
+      - backend
+      - monitoring
 
   jaeger:
     image: jaegertracing/jaeger:2.6.0
@@ -81,6 +92,8 @@ services:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
       - "16686:16686"
+    networks:
+      - monitoring
 
   loki:
     image: grafana/loki:3.4.2
@@ -90,6 +103,8 @@ services:
       - "3100:3100"
     volumes:
       - loki-data:/loki
+    networks:
+      - monitoring
 
   prometheus:
     image: prom/prometheus:v3.4.0
@@ -98,18 +113,22 @@ services:
       - '--web.enable-remote-write-receiver'
     volumes:
       - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./docker/alert-rules.yml:/etc/prometheus/alert-rules.yml
       - prometheus-data:/prometheus
     ports:
       - "9090:9090"
     depends_on:
       backend:
         condition: service_healthy
+    networks:
+      - monitoring
+      - backend
 
   grafana:
     image: grafana/grafana:11.6.0
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
     volumes:
@@ -121,6 +140,16 @@ services:
     depends_on:
       - prometheus
       - loki
+    networks:
+      - monitoring
+
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+  monitoring:
+    driver: bridge
 
 volumes:
   redis-data:

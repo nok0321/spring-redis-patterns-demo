@@ -12,7 +12,12 @@ WORKDIR /app
 
 # OpenTelemetry Java Agent
 ARG OTEL_AGENT_VERSION=2.25.0
-ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v${OTEL_AGENT_VERSION}/opentelemetry-javaagent.jar otel-agent.jar
+RUN --mount=type=cache,target=/tmp/otel-cache \
+    if [ ! -f /tmp/otel-cache/opentelemetry-javaagent-${OTEL_AGENT_VERSION}.jar ]; then \
+      wget -q -O /tmp/otel-cache/opentelemetry-javaagent-${OTEL_AGENT_VERSION}.jar \
+        "https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v${OTEL_AGENT_VERSION}/opentelemetry-javaagent.jar"; \
+    fi && \
+    cp /tmp/otel-cache/opentelemetry-javaagent-${OTEL_AGENT_VERSION}.jar otel-agent.jar
 
 COPY --from=builder /app/build/libs/cache-service.jar app.jar
 

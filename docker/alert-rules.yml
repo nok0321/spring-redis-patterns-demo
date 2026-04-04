@@ -1,0 +1,26 @@
+groups:
+  - name: http_alerts
+    rules:
+      - alert: HighHttpErrorRate
+        expr: >
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+          /
+          sum(rate(http_server_requests_seconds_count[5m]))
+          > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HTTP エラーレートが 5% を超過"
+          description: "直近5分間の HTTP 5xx エラーレートが {{ $value | humanizePercentage }} です"
+
+  - name: circuit_breaker_alerts
+    rules:
+      - alert: CircuitBreakerOpen
+        expr: resilience4j_circuitbreaker_state{state="open"} == 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "サーキットブレーカー {{ $labels.name }} が OPEN"
+          description: "サーキットブレーカーが OPEN 状態のまま 1 分以上経過しています"
