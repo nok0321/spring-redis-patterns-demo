@@ -9,9 +9,9 @@ interface Props {
 export function DeleteConfirmDialog({ isOpen, target, onConfirm, onCancel, isDeleting }: Props) {
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="delete-dialog-title">
       <div className="bg-gray-800 rounded-lg p-6 max-w-sm w-full mx-4">
-        <h3 className="text-white font-semibold mb-2">削除の確認</h3>
+        <h3 id="delete-dialog-title" className="text-white font-semibold mb-2">削除の確認</h3>
         <p className="text-gray-300 text-sm mb-4">
           <code className="bg-gray-700 px-1 rounded">{target}</code> を削除します。この操作は取り消せません。
         </p>

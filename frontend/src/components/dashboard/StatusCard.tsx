@@ -22,6 +22,13 @@ const dotColors: Record<string, string> = {
   neutral: 'bg-gray-400',
 };
 
+const dotLabels: Record<string, string> = {
+  ok: '正常',
+  warn: '警告',
+  error: 'エラー',
+  neutral: '不明',
+};
+
 export function StatusCard({ label, value, status = 'neutral', icon, onClick }: StatusCardProps) {
   return (
     <button
@@ -32,7 +39,7 @@ export function StatusCard({ label, value, status = 'neutral', icon, onClick }: 
       <div className="flex items-center justify-between mb-2">
         <span className="text-xs text-gray-400 uppercase tracking-wide">{label}</span>
         <div className="flex items-center gap-2">
-          <span className={`inline-block h-2 w-2 rounded-full ${dotColors[status]}`} />
+          <span className={`inline-block h-2 w-2 rounded-full ${dotColors[status]}`} aria-label={dotLabels[status]} />
           {icon && <span className="text-gray-400">{icon}</span>}
         </div>
       </div>
