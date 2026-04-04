@@ -10,14 +10,16 @@ RUN gradle bootJar --no-daemon
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-# OpenTelemetry Java Agent
+# OpenTelemetry Java Agent (with SHA-256 integrity check)
 ARG OTEL_AGENT_VERSION=2.25.0
+ARG OTEL_AGENT_SHA256=d6e809824176cf88792db359a9d928281ba2102fa8755453c1940f6c0289e396
 RUN --mount=type=cache,target=/tmp/otel-cache \
     if [ ! -f /tmp/otel-cache/opentelemetry-javaagent-${OTEL_AGENT_VERSION}.jar ]; then \
       wget -q -O /tmp/otel-cache/opentelemetry-javaagent-${OTEL_AGENT_VERSION}.jar \
         "https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v${OTEL_AGENT_VERSION}/opentelemetry-javaagent.jar"; \
     fi && \
-    cp /tmp/otel-cache/opentelemetry-javaagent-${OTEL_AGENT_VERSION}.jar otel-agent.jar
+    cp /tmp/otel-cache/opentelemetry-javaagent-${OTEL_AGENT_VERSION}.jar otel-agent.jar && \
+    echo "${OTEL_AGENT_SHA256}  otel-agent.jar" | sha256sum -c -
 
 COPY --from=builder /app/build/libs/cache-service.jar app.jar
 
