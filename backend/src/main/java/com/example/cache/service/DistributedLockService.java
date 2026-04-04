@@ -73,7 +73,7 @@ public class DistributedLockService {
 
     // ロック設定定数
     private static final int DEFAULT_WAIT_TIME_SECONDS = 10; // デフォルト待機時間
-    private static final int DEFAULT_LEASE_TIME_SECONDS = 30; // デフォルトリース時間（-1で自動更新）
+    private static final int DEFAULT_LEASE_TIME_SECONDS = -1; // Watchdog自動更新（ロック保持中はTTLを定期更新、異常終了時は自動解放）
     private static final int MAX_RETRY_ATTEMPTS = 3; // 最大再試行回数
     private static final long BASE_RETRY_DELAY_MS = 100; // 再試行基底遅延時間
     private static final int LOCK_SHARD_COUNT = 16; // ロックシャーディングのシャード数

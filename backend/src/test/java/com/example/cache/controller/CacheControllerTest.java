@@ -463,7 +463,7 @@ class CacheControllerTest {
     @Test
     void getMetrics_returns200WithMetricsMap() throws Exception {
         ResilientCacheService.CacheMetrics metrics = new ResilientCacheService.CacheMetrics();
-        metrics.recordOperation("get");
+        metrics.recordOperation();
         metrics.recordRedisHit();
         when(cacheService.getMetrics()).thenReturn(metrics);
 

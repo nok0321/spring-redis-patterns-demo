@@ -98,7 +98,7 @@ public class ResilientCacheService {
      * @return キャッシュされた値、またはフォールバックで取得した値のOptional
      */
     public <T> Optional<T> get(String key, Class<T> type, Supplier<T> fallbackSupplier) {
-        metrics.recordOperation("get");
+        metrics.recordOperation();
 
         // 分散レートリミッターでシステム負荷制限（Redis バックエンド）
         if (!distributedRateLimiter.tryAcquire()) {
@@ -164,7 +164,7 @@ public class ResilientCacheService {
      * @return 設定成功時true、失敗時falseのCompletableFuture
      */
     public <T> CompletableFuture<Boolean> setAsync(String key, T value, Duration ttl) {
-        metrics.recordOperation("set");
+        metrics.recordOperation();
 
         return CompletableFuture.supplyAsync(() -> {
             // 分散レートリミッターでシステム負荷制限（Redis バックエンド）
@@ -210,7 +210,7 @@ public class ResilientCacheService {
      * @return キーと値のマップ（取得できたもののみ）
      */
     public Map<String, Object> getBatch(Set<String> keys) {
-        metrics.recordOperation("batch-get");
+        metrics.recordOperation();
         logger.debug("バッチ取得開始: keys={}", keys.size());
 
         Map<String, Object> results = new HashMap<>();
@@ -259,7 +259,7 @@ public class ResilientCacheService {
      * @return Redis削除成功時true、失敗時false
      */
     public boolean delete(String key) {
-        metrics.recordOperation("delete");
+        metrics.recordOperation();
         logger.debug("キー削除開始: key={}", key);
 
         // Step 2: Redisから削除（回復力パターン付き）
@@ -589,12 +589,8 @@ public class ResilientCacheService {
         private final LongAdder fallbacks  = new LongAdder();
         private final LongAdder errors     = new LongAdder();
 
-        /**
-         * 操作実行を記録
-         *
-         * @param type 操作タイプ（"get", "set", "delete", "batch-get"）
-         */
-        public void recordOperation(String type) {
+        /** 操作実行を記録 */
+        public void recordOperation() {
             operations.increment();
         }
 

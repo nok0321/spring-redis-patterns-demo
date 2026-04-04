@@ -457,7 +457,10 @@ public class TransactionalLockService {
             // 新しいトランザクションで補償処理を実行
             // 重要: 独立したトランザクションで実行することで、
             // メイン処理の失敗の影響を受けない
-            RTransaction compensationTx = redissonClient.createTransaction(TransactionOptions.defaults());
+            RTransaction compensationTx = redissonClient.createTransaction(TransactionOptions.defaults()
+                    .timeout(TRANSACTION_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+                    .retryAttempts(MAX_TRANSACTION_RETRIES)
+                    .retryInterval(2, TimeUnit.SECONDS));
             try {
                 logger.info("補償処理開始");
                 compensation.apply(compensationTx);

@@ -119,7 +119,7 @@ class ResilientCacheServiceIT {
     @Test
     void cacheMetrics_hitRateCalculation() throws Exception {
         var metrics = new ResilientCacheService.CacheMetrics();
-        for (int i = 0; i < 10; i++) metrics.recordOperation("get");
+        for (int i = 0; i < 10; i++) metrics.recordOperation();
         for (int i = 0; i < 7; i++) metrics.recordRedisHit();
 
         Map<String, Long> map = metrics.toMap();
