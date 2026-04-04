@@ -1,11 +1,12 @@
 package com.example.cache.controller;
 
+import com.example.cache.service.CacheMetadataService;
 import com.example.cache.service.ResilientCacheService;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.junit.jupiter.api.Test;
-import org.redisson.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
@@ -14,7 +15,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeoutException;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -22,6 +24,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(CacheController.class)
+@AutoConfigureMockMvc(addFilters = false)
 @TestPropertySource(properties = "demo.features.enabled=true")
 @SuppressWarnings("unchecked") // Mockito.mock(Class) returns raw type; generic assignments are safe in test stubs
 class CacheControllerTest {
@@ -36,10 +39,7 @@ class CacheControllerTest {
     CircuitBreakerRegistry circuitBreakerRegistry;
 
     @MockitoBean
-    RedissonClient redissonClient;
-
-    @MockitoBean
-    ExecutorService virtualThreadExecutor;
+    CacheMetadataService cacheMetadataService;
 
     // --- getCache ---
 
@@ -235,9 +235,8 @@ class CacheControllerTest {
 
     @Test
     void getTtl_keyExists_returns200() throws Exception {
-        RBucket<Object> bucket = mock(RBucket.class);
-        when(bucket.remainTimeToLive()).thenReturn(60000L);
-        when(redissonClient.getBucket("mykey")).thenReturn(bucket);
+        when(cacheMetadataService.getTtl("mykey"))
+                .thenReturn(Optional.of(new CacheMetadataService.TtlInfo(60000L, 60L, false)));
 
         mockMvc.perform(get("/api/cache/ttl/mykey"))
                 .andExpect(status().isOk())
@@ -247,9 +246,8 @@ class CacheControllerTest {
 
     @Test
     void getTtl_persistent_showsNegativeOne() throws Exception {
-        RBucket<Object> bucket = mock(RBucket.class);
-        when(bucket.remainTimeToLive()).thenReturn(-1L);
-        when(redissonClient.getBucket("pkey")).thenReturn(bucket);
+        when(cacheMetadataService.getTtl("pkey"))
+                .thenReturn(Optional.of(new CacheMetadataService.TtlInfo(-1L, -1L, true)));
 
         mockMvc.perform(get("/api/cache/ttl/pkey"))
                 .andExpect(status().isOk())
@@ -258,9 +256,8 @@ class CacheControllerTest {
 
     @Test
     void getTtl_keyNotExists_returns404() throws Exception {
-        RBucket<Object> bucket = mock(RBucket.class);
-        when(bucket.remainTimeToLive()).thenReturn(-2L);
-        when(redissonClient.getBucket("gone")).thenReturn(bucket);
+        when(cacheMetadataService.getTtl("gone"))
+                .thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/cache/ttl/gone"))
                 .andExpect(status().isNotFound());
@@ -270,9 +267,8 @@ class CacheControllerTest {
 
     @Test
     void getKeyType_objectType_returns200() throws Exception {
-        RKeys keys = mock(RKeys.class);
-        when(keys.getType("mykey")).thenReturn(RType.OBJECT);
-        when(redissonClient.getKeys()).thenReturn(keys);
+        when(cacheMetadataService.getKeyType("mykey"))
+                .thenReturn(Optional.of("OBJECT"));
 
         mockMvc.perform(get("/api/cache/type/mykey"))
                 .andExpect(status().isOk())
@@ -281,9 +277,8 @@ class CacheControllerTest {
 
     @Test
     void getKeyType_keyNotExist_returns404() throws Exception {
-        RKeys keys = mock(RKeys.class);
-        when(keys.getType("gone")).thenReturn(null);
-        when(redissonClient.getKeys()).thenReturn(keys);
+        when(cacheMetadataService.getKeyType("gone"))
+                .thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/cache/type/gone"))
                 .andExpect(status().isNotFound());
@@ -293,13 +288,8 @@ class CacheControllerTest {
 
     @Test
     void getTyped_objectType_returnsBucketValue() throws Exception {
-        RKeys keys = mock(RKeys.class);
-        when(keys.getType("strkey")).thenReturn(RType.OBJECT);
-        when(redissonClient.getKeys()).thenReturn(keys);
-
-        RBucket<Object> bucket = mock(RBucket.class);
-        when(bucket.get()).thenReturn("hello world");
-        when(redissonClient.getBucket("strkey")).thenReturn(bucket);
+        when(cacheMetadataService.getTypedValue("strkey"))
+                .thenReturn(Optional.of(new CacheMetadataService.TypedValue("strkey", "OBJECT", "hello world")));
 
         mockMvc.perform(get("/api/cache/get-typed/strkey"))
                 .andExpect(status().isOk())
@@ -309,13 +299,8 @@ class CacheControllerTest {
 
     @Test
     void getTyped_mapType_returnsAllMap() throws Exception {
-        RKeys keys = mock(RKeys.class);
-        when(keys.getType("mapkey")).thenReturn(RType.MAP);
-        when(redissonClient.getKeys()).thenReturn(keys);
-
-        RMap<Object, Object> map = mock(RMap.class);
-        when(map.readAllMap()).thenReturn(Map.of("field1", "value1"));
-        when(redissonClient.getMap("mapkey")).thenReturn(map);
+        when(cacheMetadataService.getTypedValue("mapkey"))
+                .thenReturn(Optional.of(new CacheMetadataService.TypedValue("mapkey", "MAP", Map.of("field1", "value1"))));
 
         mockMvc.perform(get("/api/cache/get-typed/mapkey"))
                 .andExpect(status().isOk())
@@ -324,13 +309,8 @@ class CacheControllerTest {
 
     @Test
     void getTyped_listType_returnsList() throws Exception {
-        RKeys keys = mock(RKeys.class);
-        when(keys.getType("listkey")).thenReturn(RType.LIST);
-        when(redissonClient.getKeys()).thenReturn(keys);
-
-        RList<Object> list = mock(RList.class);
-        when(list.readAll()).thenReturn(List.of("a", "b", "c"));
-        when(redissonClient.getList("listkey")).thenReturn(list);
+        when(cacheMetadataService.getTypedValue("listkey"))
+                .thenReturn(Optional.of(new CacheMetadataService.TypedValue("listkey", "LIST", List.of("a", "b", "c"))));
 
         mockMvc.perform(get("/api/cache/get-typed/listkey"))
                 .andExpect(status().isOk())
@@ -339,9 +319,8 @@ class CacheControllerTest {
 
     @Test
     void getTyped_keyNotExist_returns404() throws Exception {
-        RKeys keys = mock(RKeys.class);
-        when(keys.getType("gone")).thenReturn(null);
-        when(redissonClient.getKeys()).thenReturn(keys);
+        when(cacheMetadataService.getTypedValue("gone"))
+                .thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/cache/get-typed/gone"))
                 .andExpect(status().isNotFound());
@@ -349,9 +328,9 @@ class CacheControllerTest {
 
     @Test
     void getTyped_streamType_returnsString() throws Exception {
-        RKeys keys = mock(RKeys.class);
-        when(keys.getType("streamkey")).thenReturn(RType.STREAM);
-        when(redissonClient.getKeys()).thenReturn(keys);
+        when(cacheMetadataService.getTypedValue("streamkey"))
+                .thenReturn(Optional.of(new CacheMetadataService.TypedValue(
+                        "streamkey", "STREAM", "(Stream type: use Redis CLI for XRANGE/XREAD)")));
 
         mockMvc.perform(get("/api/cache/get-typed/streamkey"))
                 .andExpect(status().isOk())
@@ -360,13 +339,8 @@ class CacheControllerTest {
 
     @Test
     void getTyped_exceptionThrown_returns500() throws Exception {
-        RKeys keys = mock(RKeys.class);
-        when(keys.getType("badkey")).thenReturn(RType.OBJECT);
-        when(redissonClient.getKeys()).thenReturn(keys);
-
-        RBucket<Object> bucket = mock(RBucket.class);
-        when(bucket.get()).thenThrow(new RuntimeException("codec error"));
-        when(redissonClient.getBucket("badkey")).thenReturn(bucket);
+        when(cacheMetadataService.getTypedValue("badkey"))
+                .thenThrow(new RuntimeException("codec error"));
 
         mockMvc.perform(get("/api/cache/get-typed/badkey"))
                 .andExpect(status().isInternalServerError())
@@ -542,16 +516,10 @@ class CacheControllerTest {
 
     @Test
     void getTtlBatch_returnsResults() throws Exception {
-        RBucket<Object> bucket = mock(RBucket.class);
-        when(bucket.remainTimeToLive()).thenReturn(30000L);
-        when(redissonClient.getBucket(anyString())).thenReturn(bucket);
-
-        // Use an executor that runs tasks inline for testing
-        doAnswer(inv -> {
-            Runnable r = inv.getArgument(0);
-            r.run();
-            return java.util.concurrent.CompletableFuture.completedFuture(null);
-        }).when(virtualThreadExecutor).execute(any());
+        Map<String, Map<String, Object>> batchResult = Map.of(
+                "k1", Map.of("ttlMs", 30000L, "persistent", false),
+                "k2", Map.of("ttlMs", 30000L, "persistent", false));
+        when(cacheMetadataService.getTtlBatch(any(String[].class))).thenReturn(batchResult);
 
         mockMvc.perform(get("/api/cache/ttl-batch?keys=k1,k2"))
                 .andExpect(status().isOk())
@@ -574,13 +542,8 @@ class CacheControllerTest {
 
     @Test
     void getTyped_setType_returnsSet() throws Exception {
-        RKeys keys = mock(RKeys.class);
-        when(keys.getType("setkey")).thenReturn(RType.SET);
-        when(redissonClient.getKeys()).thenReturn(keys);
-
-        RSet<Object> rset = mock(RSet.class);
-        when(rset.readAll()).thenReturn(Set.of("a", "b"));
-        when(redissonClient.getSet("setkey")).thenReturn(rset);
+        when(cacheMetadataService.getTypedValue("setkey"))
+                .thenReturn(Optional.of(new CacheMetadataService.TypedValue("setkey", "SET", Set.of("a", "b"))));
 
         mockMvc.perform(get("/api/cache/get-typed/setkey"))
                 .andExpect(status().isOk())
@@ -591,13 +554,8 @@ class CacheControllerTest {
 
     @Test
     void getTyped_zsetType_returnsZset() throws Exception {
-        RKeys keys = mock(RKeys.class);
-        when(keys.getType("zsetkey")).thenReturn(RType.ZSET);
-        when(redissonClient.getKeys()).thenReturn(keys);
-
-        RScoredSortedSet<Object> sset = mock(RScoredSortedSet.class);
-        when(sset.readAll()).thenReturn(Set.of("x"));
-        when(redissonClient.<Object>getScoredSortedSet("zsetkey")).thenReturn(sset);
+        when(cacheMetadataService.getTypedValue("zsetkey"))
+                .thenReturn(Optional.of(new CacheMetadataService.TypedValue("zsetkey", "ZSET", Set.of("x"))));
 
         mockMvc.perform(get("/api/cache/get-typed/zsetkey"))
                 .andExpect(status().isOk())
@@ -723,6 +681,9 @@ class CacheControllerTest {
 
     @Test
     void getTtlBatch_allBlankKeys_returnsEmptyResults() throws Exception {
+        when(cacheMetadataService.getTtlBatch(any(String[].class)))
+                .thenReturn(Map.of());
+
         mockMvc.perform(get("/api/cache/ttl-batch?keys=, ,  "))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results").exists());
@@ -730,8 +691,8 @@ class CacheControllerTest {
 
     @Test
     void getTtlBatch_timeout_returns504() throws Exception {
-        // Use an executor that never runs the submitted task, causing a timeout
-        doAnswer(inv -> null).when(virtualThreadExecutor).execute(any());
+        when(cacheMetadataService.getTtlBatch(any(String[].class)))
+                .thenThrow(new TimeoutException("timed out"));
 
         mockMvc.perform(get("/api/cache/ttl-batch?keys=k1"))
                 .andExpect(status().isGatewayTimeout())
@@ -740,17 +701,8 @@ class CacheControllerTest {
 
     @Test
     void getTtlBatch_executionException_returns500() throws Exception {
-        // Make the bucket throw so the CompletableFuture completes exceptionally
-        RBucket<Object> bucket = mock(RBucket.class);
-        when(bucket.remainTimeToLive()).thenThrow(new RuntimeException("connection lost"));
-        when(redissonClient.getBucket(anyString())).thenReturn(bucket);
-
-        // Run the task inline so the exception is captured by the CompletableFuture
-        doAnswer(inv -> {
-            Runnable r = inv.getArgument(0);
-            r.run(); // CompletableFuture.runAsync wraps this; exception marks future as failed
-            return null;
-        }).when(virtualThreadExecutor).execute(any());
+        when(cacheMetadataService.getTtlBatch(any(String[].class)))
+                .thenThrow(new ExecutionException("connection lost", new RuntimeException("connection lost")));
 
         mockMvc.perform(get("/api/cache/ttl-batch?keys=k1"))
                 .andExpect(status().isInternalServerError())
