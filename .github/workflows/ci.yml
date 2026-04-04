@@ -24,6 +24,10 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Make gradlew executable
+        working-directory: backend
+        run: chmod +x ./gradlew
+
       - name: Build
         working-directory: backend
         run: ./gradlew build -x test
@@ -59,9 +63,9 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
-      - name: Test + Coverage
+      - name: Test
         working-directory: frontend
-        run: npm test -- --coverage
+        run: npm test
 
       - name: Build
         working-directory: frontend
