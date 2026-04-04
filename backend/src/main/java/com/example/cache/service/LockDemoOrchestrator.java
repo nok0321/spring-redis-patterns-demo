@@ -1,6 +1,5 @@
 package com.example.cache.service;
 
-import com.example.cache.util.TypeResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -82,17 +81,14 @@ public class LockDemoOrchestrator {
         return lockService.executeWithFencedLock(lockKey, (Long fencingToken) -> {
             String readKey = (String) data.get("key");
             if (readKey == null) throw new IllegalArgumentException("'key' is required for fenced_cache_read");
-            String type = (String) data.getOrDefault("type", "Object");
-            Class<?> valueClass = TypeResolver.fromString(type);
 
-            Optional<?> value = cacheService.get(readKey, valueClass, null);
+            Optional<?> value = cacheService.get(readKey, null);
             Map<String, Object> r = new HashMap<>();
             r.put("operation", "fenced_cache_read");
             r.put("fencingToken", fencingToken);
             r.put("key", readKey);
             r.put("found", value.isPresent());
             r.put("value", value.orElse(null));
-            r.put("type", type);
             return r;
         });
     }
@@ -136,7 +132,7 @@ public class LockDemoOrchestrator {
             if (incrementNum == null) throw new IllegalArgumentException("'increment' is required for fenced_atomic_increment");
             int increment = incrementNum.intValue();
 
-            Optional<Integer> current = cacheService.get(counterKey, Integer.class, () -> 0);
+            Optional<Integer> current = cacheService.get(counterKey, () -> 0);
             int newValue = current.orElse(0) + increment;
 
             cacheService.setAsync(counterKey, newValue, Duration.ofDays(1)).join();
@@ -157,10 +153,8 @@ public class LockDemoOrchestrator {
             if (targetKey == null) throw new IllegalArgumentException("'key' is required for fenced_conditional_update");
             Object expectedValue = data.get("expectedValue");
             Object newValue = data.get("newValue");
-            String type = (String) data.getOrDefault("type", "Object");
-            Class<?> valueClass = TypeResolver.fromString(type);
 
-            Optional<?> currentValue = cacheService.get(targetKey, valueClass, null);
+            Optional<?> currentValue = cacheService.get(targetKey, null);
             boolean updated = false;
 
             if (currentValue.isPresent() && currentValue.get().equals(expectedValue)) {
@@ -197,15 +191,12 @@ public class LockDemoOrchestrator {
     private Optional<Map<String, Object>> lockCacheRead(String lockKey, Map<String, Object> data) {
         return lockService.executeWithReadLock(lockKey, () -> {
             String readKey = (String) data.get("key");
-            String type = (String) data.getOrDefault("type", "Object");
-            Class<?> valueClass = TypeResolver.fromString(type);
 
-            Optional<?> value = cacheService.get(readKey, valueClass, null);
+            Optional<?> value = cacheService.get(readKey, null);
             Map<String, Object> r = new HashMap<>();
             r.put("key", readKey);
             r.put("found", value.isPresent());
             r.put("value", value.orElse(null));
-            r.put("type", type);
             return r;
         });
     }
@@ -223,7 +214,7 @@ public class LockDemoOrchestrator {
             String counterKey = (String) data.get("counterKey");
             int increment = ((Number) data.get("increment")).intValue();
 
-            Optional<Integer> current = cacheService.get(counterKey, Integer.class, () -> 0);
+            Optional<Integer> current = cacheService.get(counterKey, () -> 0);
             int newValue = current.orElse(0) + increment;
 
             cacheService.setAsync(counterKey, newValue, Duration.ofDays(1)).join();

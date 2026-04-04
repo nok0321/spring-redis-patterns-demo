@@ -53,6 +53,11 @@ resilience4j:
           - org.redisson.client.RedisConnectionException
           - org.redisson.client.RedisTimeoutException
           - java.io.IOException
+  bulkhead:
+    instances:
+      cache-operations:
+        max-concurrent-calls: 50
+        max-wait-duration: 500ms
   # NOTE: この Resilience4j ratelimiter 設定は参照用に残している。
   # キャッシュ操作のレート制限は Redis バックエンドの分散レートリミッター
   # (DistributedRateLimiterService / Redisson RRateLimiter) に移行済み。

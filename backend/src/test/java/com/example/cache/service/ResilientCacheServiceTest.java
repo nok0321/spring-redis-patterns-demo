@@ -1,5 +1,6 @@
 package com.example.cache.service;
 
+import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -76,6 +77,7 @@ class ResilientCacheServiceTest {
                 redissonClient,
                 circuitBreakerRegistry,
                 retryRegistry,
+                BulkheadRegistry.ofDefaults(),
                 distributedRateLimiter,
                 executor);
     }
@@ -89,7 +91,7 @@ class ResilientCacheServiceTest {
         when(redissonClient.<Object>getBucket("mykey")).thenReturn((RBucket) bucket);
         when(bucket.get()).thenReturn("hello");
 
-        Optional<String> result = service.get("mykey", String.class, null);
+        Optional<String> result = service.get("mykey", null);
 
         assertThat(result).contains("hello");
     }
@@ -99,7 +101,7 @@ class ResilientCacheServiceTest {
         when(redissonClient.<Object>getBucket("missing")).thenReturn((RBucket) bucket);
         when(bucket.get()).thenReturn(null);
 
-        Optional<String> result = service.get("missing", String.class, null);
+        Optional<String> result = service.get("missing", null);
 
         assertThat(result).isEmpty();
     }
@@ -109,7 +111,7 @@ class ResilientCacheServiceTest {
         when(redissonClient.<Object>getBucket("anykey")).thenReturn((RBucket) bucket);
         when(bucket.get()).thenThrow(new RedisConnectionException("connection refused"));
 
-        Optional<String> result = service.get("anykey", String.class, () -> "fallback-value");
+        Optional<String> result = service.get("anykey", () -> "fallback-value");
 
         assertThat(result).contains("fallback-value");
     }
@@ -119,7 +121,7 @@ class ResilientCacheServiceTest {
         when(redissonClient.<Object>getBucket("anykey")).thenReturn((RBucket) bucket);
         when(bucket.get()).thenThrow(new RedisConnectionException("connection refused"));
 
-        Optional<String> result = service.get("anykey", String.class, null);
+        Optional<String> result = service.get("anykey", null);
 
         assertThat(result).isEmpty();
     }
@@ -129,7 +131,7 @@ class ResilientCacheServiceTest {
         when(redissonClient.<Object>getBucket("anykey")).thenReturn((RBucket) bucket);
         when(bucket.get()).thenThrow(new RedisConnectionException("connection refused"));
 
-        Optional<String> result = service.get("anykey", String.class, () -> {
+        Optional<String> result = service.get("anykey", () -> {
             throw new RuntimeException("fallback also failed");
         });
 

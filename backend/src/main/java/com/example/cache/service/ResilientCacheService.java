@@ -1,5 +1,7 @@
 package com.example.cache.service;
 
+import io.github.resilience4j.bulkhead.Bulkhead;
+import io.github.resilience4j.bulkhead.BulkheadRegistry;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.decorators.Decorators;
@@ -38,6 +40,7 @@ import java.util.function.Supplier;
  * ※ローカル（インプロセス）キャッシュは現在未実装
  *
  * ## 回復力パターン
+ * - **Bulkhead**: 並行呼び出し数の制限（Virtual Threads 環境でのリソース保護）
  * - **CircuitBreaker**: 連続的な障害時の呼び出し停止
  * - **Retry**: 一時的障害に対する自動再試行
  * - **RateLimiter**: Redis バックエンド分散レートリミッター（{@link DistributedRateLimiterService}）
@@ -63,6 +66,7 @@ public class ResilientCacheService {
     // Resilience4jコンポーネント（回復力パターン実装）
     private final CircuitBreaker circuitBreaker;
     private final Retry retry;
+    private final Bulkhead bulkhead;
 
     // Redis バックエンドの分散レートリミッター
     private final DistributedRateLimiterService distributedRateLimiter;
@@ -70,11 +74,13 @@ public class ResilientCacheService {
     public ResilientCacheService(RedissonClient redissonClient,
                                  CircuitBreakerRegistry circuitBreakerRegistry,
                                  RetryRegistry retryRegistry,
+                                 BulkheadRegistry bulkheadRegistry,
                                  DistributedRateLimiterService distributedRateLimiter,
                                  ExecutorService virtualThreadExecutor) {
         this.redissonClient = redissonClient;
         this.circuitBreaker = circuitBreakerRegistry.circuitBreaker("cache-operations");
         this.retry = retryRegistry.retry("default");
+        this.bulkhead = bulkheadRegistry.bulkhead("cache-operations");
         this.distributedRateLimiter = distributedRateLimiter;
         this.virtualExecutor = virtualThreadExecutor;
     }
@@ -93,11 +99,10 @@ public class ResilientCacheService {
      *
      * @param <T>              キャッシュする値の型
      * @param key              キャッシュキー
-     * @param type             期待する値の型（キャスト用）
      * @param fallbackSupplier キャッシュミス時のデータ取得関数
      * @return キャッシュされた値、またはフォールバックで取得した値のOptional
      */
-    public <T> Optional<T> get(String key, Class<T> type, Supplier<T> fallbackSupplier) {
+    public <T> Optional<T> get(String key, Supplier<T> fallbackSupplier) {
         metrics.recordOperation();
 
         // 分散レートリミッターでシステム負荷制限（Redis バックエンド）
@@ -108,12 +113,13 @@ public class ResilientCacheService {
         }
 
         // L1: Redis操作を回復力パターンでラップ
-        Supplier<Optional<T>> redisOperation = () -> getFromRedis(key, type);
+        Supplier<Optional<T>> redisOperation = () -> getFromRedis(key);
 
         // Decoratorsパターンで複数の回復力パターンを組み合わせ
         // 実行順序: Retry → CircuitBreaker → 実際のRedis操作
         // （レートリミットは上で事前チェック済み）
         Optional<T> result = Decorators.ofSupplier(redisOperation)
+                .withBulkhead(bulkhead) // 並行数制限で Virtual Threads のスレッド爆発を防止
                 .withCircuitBreaker(circuitBreaker) // サーキットブレーカーで障害時の呼び出し停止
                 .withRetry(retry) // 一時的障害に対する再試行
                 .withFallback(Arrays.asList( // 特定例外に対するフォールバック
@@ -178,6 +184,7 @@ public class ResilientCacheService {
 
             // Redis書き込み操作を回復力パターンで保護
             boolean redisResult = Decorators.ofSupplier(operation)
+                    .withBulkhead(bulkhead)
                     .withCircuitBreaker(circuitBreaker)
                     .withRetry(retry)
                     .withFallback(Arrays.asList(
@@ -225,6 +232,7 @@ public class ResilientCacheService {
         Supplier<Map<String, Object>> batchOperation = () -> getBatchFromRedis(missingKeys);
 
         Map<String, Object> redisResults = Decorators.ofSupplier(batchOperation)
+                .withBulkhead(bulkhead)
                 .withCircuitBreaker(circuitBreaker)
                 .withRetry(retry)
                 .withFallback(Arrays.asList(Exception.class), throwable -> {
@@ -264,6 +272,7 @@ public class ResilientCacheService {
 
         // Step 2: Redisから削除（回復力パターン付き）
         boolean result = Decorators.ofSupplier(() -> deleteFromRedis(key))
+                .withBulkhead(bulkhead)
                 .withCircuitBreaker(circuitBreaker)
                 .withRetry(retry)
                 .withFallback(Arrays.asList(Exception.class), throwable -> {
@@ -304,6 +313,7 @@ public class ResilientCacheService {
         }
 
         Set<String> results = Decorators.ofSupplier(() -> searchKeysInRedis(pattern, limit))
+                .withBulkhead(bulkhead)
                 .withCircuitBreaker(circuitBreaker)
                 .withFallback(Arrays.asList(Exception.class), throwable -> {
                     logger.warn("キー検索失敗: pattern={}", pattern, throwable);
@@ -325,10 +335,9 @@ public class ResilientCacheService {
      *
      * @param <T>  値の型
      * @param key  キー
-     * @param type 期待する型
      * @return 取得した値のOptional
      */
-    private <T> Optional<T> getFromRedis(String key, Class<T> type) {
+    private <T> Optional<T> getFromRedis(String key) {
         if (simulateError) {
             throw new RuntimeException("エラーシミュレーション中: 意図的に障害を注入しています");
         }
@@ -493,28 +502,30 @@ public class ResilientCacheService {
      * @return ウォームアップ完了を示すCompletableFuture
      */
     public CompletableFuture<Void> warmUp(Set<String> keys) {
-        return CompletableFuture.runAsync(() -> {
-            logger.info("キャッシュウォームアップ開始: keys={}", keys.size());
-            long startTime = System.currentTimeMillis();
+        logger.info("キャッシュウォームアップ開始: keys={}", keys.size());
+        long startTime = System.currentTimeMillis();
+        AtomicInteger successCount = new AtomicInteger(0);
 
-            int successCount = 0;
-            for (String key : keys) {
-                try {
-                    // 各キーに対してget操作を実行（フォールバックはnull）
-                    Optional<Object> result = get(key, Object.class, null);
-                    if (result.isPresent()) {
-                        successCount++;
+        // 各キーを個別の Virtual Thread で並行実行
+        List<CompletableFuture<Void>> futures = keys.stream()
+                .map(key -> CompletableFuture.runAsync(() -> {
+                    try {
+                        Optional<Object> result = get(key, null);
+                        if (result.isPresent()) {
+                            successCount.incrementAndGet();
+                        }
+                    } catch (Exception e) {
+                        logger.debug("ウォームアップでキー処理失敗: key={}", key, e);
                     }
-                } catch (Exception e) {
-                    logger.debug("ウォームアップでキー処理失敗: key={}", key, e);
-                    // 個別の失敗は継続（部分的成功を許可）
-                }
-            }
+                }, virtualExecutor))
+                .toList();
 
-            long duration = System.currentTimeMillis() - startTime;
-            logger.info("キャッシュウォームアップ完了: total={}, success={}, duration={}ms",
-                    keys.size(), successCount, duration);
-        }, virtualExecutor);
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .thenRun(() -> {
+                    long duration = System.currentTimeMillis() - startTime;
+                    logger.info("キャッシュウォームアップ完了: total={}, success={}, duration={}ms",
+                            keys.size(), successCount.get(), duration);
+                });
     }
 
     /**

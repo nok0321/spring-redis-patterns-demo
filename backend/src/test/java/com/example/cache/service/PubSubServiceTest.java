@@ -12,6 +12,8 @@ import org.redisson.api.RedissonClient;
 import org.redisson.api.listener.MessageListener;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.concurrent.ExecutorService;
+
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -21,6 +23,9 @@ class PubSubServiceTest {
 
     @Mock
     RedissonClient redissonClient;
+
+    @Mock
+    ExecutorService virtualThreadExecutor;
 
     @InjectMocks
     PubSubService pubSubService;
@@ -32,6 +37,9 @@ class PubSubServiceTest {
     void setUp() {
         // lenient: not all tests call getTopic (e.g. createEmitter tests)
         lenient().when(redissonClient.getTopic(anyString())).thenReturn(rTopic);
+        // Execute runnables immediately on the calling thread for deterministic tests
+        lenient().doAnswer(inv -> { ((Runnable) inv.getArgument(0)).run(); return null; })
+                .when(virtualThreadExecutor).execute(any(Runnable.class));
     }
 
     @Test

@@ -2,7 +2,6 @@ package com.example.cache.controller;
 
 import com.example.cache.service.CacheMetadataService;
 import com.example.cache.service.ResilientCacheService;
-import com.example.cache.util.TypeResolver;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -53,14 +52,12 @@ public class CacheController {
     })
     @GetMapping("/get/{key}")
     public ResponseEntity<Map<String, Object>> getCache(
-            @Parameter(description = "Redis キー") @PathVariable String key,
-            @Parameter(description = "値の型（String/Integer/Long/Double/Boolean/Map/List）") @RequestParam(required = false) String type) {
+            @Parameter(description = "Redis キー") @PathVariable String key) {
 
         Optional<ResponseEntity<Map<String, Object>>> keyError = validateKey(key);
         if (keyError.isPresent()) return keyError.get();
 
-        Class<?> valueClass = type != null ? TypeResolver.fromString(type) : String.class;
-        Optional<?> value = cacheService.get(key, valueClass, null);
+        Optional<?> value = cacheService.get(key, null);
 
         Map<String, Object> result = new HashMap<>();
         result.put("key", key);
@@ -189,11 +186,11 @@ public class CacheController {
         Duration ttl = Duration.ofHours(1);
         if (body.containsKey("ttl")) {
             Object ttlValue = body.get("ttl");
-            if (ttlValue instanceof Number) {
-                ttl = Duration.ofSeconds(((Number) ttlValue).longValue());
-            } else if (ttlValue instanceof String) {
+            if (ttlValue instanceof Number n) {
+                ttl = Duration.ofSeconds(n.longValue());
+            } else if (ttlValue instanceof String s) {
                 try {
-                    ttl = Duration.parse((String) ttlValue);
+                    ttl = Duration.parse(s);
                 } catch (DateTimeParseException e) {
                     return ResponseEntity.badRequest().body(Map.of(
                             "error", "Invalid ttl format. Use ISO-8601 duration (e.g. PT1H) or omit for default",
@@ -255,12 +252,12 @@ public class CacheController {
             Duration ttl = Duration.ofHours(1);
             if (entry.containsKey("ttl")) {
                 Object ttlValue = entry.get("ttl");
-                if (!(ttlValue instanceof Number)) {
+                if (!(ttlValue instanceof Number n)) {
                     return ResponseEntity.badRequest().body(Map.of(
                             "error", "Entry at index " + i + ": 'ttl' must be a number (seconds)",
                             "timestamp", System.currentTimeMillis()));
                 }
-                ttl = Duration.ofSeconds(((Number) ttlValue).longValue());
+                ttl = Duration.ofSeconds(n.longValue());
             }
 
             futures.add(cacheService.setAsync(key, value, ttl));

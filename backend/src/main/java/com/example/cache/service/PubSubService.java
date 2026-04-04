@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -29,9 +30,11 @@ public class PubSubService {
     private static final int MAX_EMITTERS = 100;
 
     private final RedissonClient redissonClient;
+    private final ExecutorService virtualExecutor;
 
-    public PubSubService(RedissonClient redissonClient) {
+    public PubSubService(RedissonClient redissonClient, ExecutorService virtualThreadExecutor) {
         this.redissonClient = redissonClient;
+        this.virtualExecutor = virtualThreadExecutor;
     }
 
     private final CopyOnWriteArrayList<SseEmitter> emitters = new CopyOnWriteArrayList<>();
@@ -63,7 +66,8 @@ public class PubSubService {
             RTopic rTopic = redissonClient.getTopic(topic);
             int listenerId = rTopic.addListener(String.class, (channel, msg) -> {
                 logger.info("受信: topic={}, message={}", channel, msg);
-                broadcastToEmitters(topic, msg);
+                // Netty スレッドから Virtual Thread に切り替えて SSE 送信を実行
+                virtualExecutor.execute(() -> broadcastToEmitters(topic, msg));
             });
             topicListenerIds.put(topic, listenerId);
             logger.info("トピック購読開始: {}", topic);
