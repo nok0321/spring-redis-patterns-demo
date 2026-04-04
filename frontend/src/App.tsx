@@ -14,6 +14,7 @@ import { RateLimiterPage }      from './pages/RateLimiterPage';
 import { PubSubPage }           from './pages/PubSubPage';
 import { SagaTracerPage }       from './pages/SagaTracerPage';
 import { RedisCliPage }         from './pages/RedisCliPage';
+import { NotFoundPage }         from './pages/NotFoundPage';
 
 export default function App() {
   return (
@@ -35,7 +36,7 @@ export default function App() {
           <Route path="/pubsub"          element={<PubSubPage />} />
           <Route path="/saga"            element={<SagaTracerPage />} />
           <Route path="/cli"             element={<RedisCliPage />} />
-          <Route path="*"               element={<div className="p-8 text-center"><h2 className="text-xl font-bold mb-4">404 - ページが見つかりません</h2><a href="/" className="text-blue-400 hover:text-blue-300 underline">ホームに戻る</a></div>} />
+          <Route path="*"               element={<NotFoundPage />} />
         </Routes>
         </ErrorBoundary>
       </AppShell>
