@@ -72,6 +72,7 @@ services:
       - "4318:4318"
     depends_on:
       - jaeger
+      - loki
 
   jaeger:
     image: jaegertracing/all-in-one:2.6
@@ -80,6 +81,15 @@ services:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
       - "16686:16686"
+
+  loki:
+    image: grafana/loki:3.4.2
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
 
   prometheus:
     image: prom/prometheus:v3.4.0
@@ -110,8 +120,10 @@ services:
       - "3000:3000"
     depends_on:
       - prometheus
+      - loki
 
 volumes:
   redis-data:
   prometheus-data:
   grafana-data:
+  loki-data:
