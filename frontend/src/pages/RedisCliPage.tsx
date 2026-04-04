@@ -3,7 +3,6 @@ import { RedisCli } from '../components/cli/RedisCli';
 const ALLOWED_COMMANDS = [
   { cmd: 'GET <key>',          desc: 'String 値を取得' },
   { cmd: 'SET <key> <value>',  desc: 'String 値を設定' },
-  { cmd: 'KEYS <pattern>',     desc: 'パターンでキー検索' },
   { cmd: 'SCAN 0',             desc: 'キーのスキャン' },
   { cmd: 'TTL <key>',          desc: '残り TTL (秒)' },
   { cmd: 'PTTL <key>',         desc: '残り TTL (ミリ秒)' },

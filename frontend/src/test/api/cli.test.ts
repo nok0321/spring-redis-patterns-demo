@@ -24,7 +24,7 @@ describe('cliApi', () => {
   })
 
   it('execute handles commands with spaces and arguments', async () => {
-    const result = await cliApi.execute('KEYS demo:*')
+    const result = await cliApi.execute('SCAN 0')
     expect(result).toHaveProperty('timestamp')
     expect(typeof result.timestamp).toBe('number')
   })
