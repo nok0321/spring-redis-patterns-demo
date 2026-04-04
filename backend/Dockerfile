@@ -16,6 +16,10 @@ ADD https://github.com/open-telemetry/opentelemetry-java-instrumentation/release
 
 COPY --from=builder /app/build/libs/cache-service.jar app.jar
 
+RUN addgroup -S app && adduser -S app -G app && \
+    chown -R app:app /app
+USER app
+
 EXPOSE 8080
 ENTRYPOINT ["java", \
   "-javaagent:otel-agent.jar", \
