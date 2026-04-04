@@ -66,15 +66,11 @@ class CliControllerTest {
     }
 
     @Test
-    void execute_keysCommand_returnsList() throws Exception {
-        RKeys rKeys = mock(RKeys.class);
-        when(rKeys.getKeysStream(any())).thenReturn(Stream.of("key1", "key2"));
-        when(redissonClient.getKeys()).thenReturn(rKeys);
-
+    void execute_keysCommand_rejected() throws Exception {
         mockMvc.perform(post("/api/cli/execute")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"command\":\"KEYS *\"}"))
-                .andExpect(status().isOk());
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -460,18 +456,14 @@ class CliControllerTest {
         verify(bucket).set("hello world");
     }
 
-    // --- KEYS with no pattern defaults to * ---
+    // --- KEYS without pattern also rejected ---
 
     @Test
-    void execute_keysWithoutPattern_usesWildcard() throws Exception {
-        RKeys rKeys = mock(RKeys.class);
-        when(rKeys.getKeysStream(any())).thenReturn(Stream.of("key1"));
-        when(redissonClient.getKeys()).thenReturn(rKeys);
-
+    void execute_keysWithoutPattern_rejected() throws Exception {
         mockMvc.perform(post("/api/cli/execute")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"command\":\"KEYS\"}"))
-                .andExpect(status().isOk());
+                .andExpect(status().isBadRequest());
     }
 
     // --- ZRANGE with empty sorted set → empty list ---

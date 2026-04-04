@@ -15,8 +15,8 @@ class CacheMetricsTest {
     @Test
     void recordOperation_incrementsCount() {
         var metrics = new ResilientCacheService.CacheMetrics();
-        metrics.recordOperation("get");
-        metrics.recordOperation("set");
+        metrics.recordOperation();
+        metrics.recordOperation();
 
         Map<String, Long> map = metrics.toMap();
         assertThat(map.get("operations")).isEqualTo(2L);
@@ -35,7 +35,7 @@ class CacheMetricsTest {
     @Test
     void toMap_hitRateCalculation_correct() {
         var metrics = new ResilientCacheService.CacheMetrics();
-        for (int i = 0; i < 10; i++) metrics.recordOperation("get");
+        for (int i = 0; i < 10; i++) metrics.recordOperation();
         for (int i = 0; i < 7; i++) metrics.recordRedisHit();
 
         Map<String, Long> map = metrics.toMap();
@@ -54,7 +54,7 @@ class CacheMetricsTest {
     @Test
     void reset_clearsAllCounters() {
         var metrics = new ResilientCacheService.CacheMetrics();
-        metrics.recordOperation("get");
+        metrics.recordOperation();
         metrics.recordRedisHit();
         metrics.recordFallback();
         metrics.recordError();
@@ -71,7 +71,7 @@ class CacheMetricsTest {
     @Test
     void toString_includesAllFields() {
         var metrics = new ResilientCacheService.CacheMetrics();
-        metrics.recordOperation("get");
+        metrics.recordOperation();
 
         String str = metrics.toString();
         assertThat(str).contains("operations=1");
@@ -91,7 +91,7 @@ class CacheMetricsTest {
                 try {
                     ready.countDown();
                     go.await();
-                    metrics.recordOperation("get");
+                    metrics.recordOperation();
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 } finally {

@@ -75,13 +75,13 @@ class DistributedLockServiceTest {
         @Test
         void delegates_to_overload_with_default_waitTime_and_leaseTime() throws InterruptedException {
             when(redissonClient.getLock("key1")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(lock.isHeldByCurrentThread()).thenReturn(true);
 
             Optional<String> result = service.executeWithLock("key1", () -> "value");
 
             assertThat(result).contains("value");
-            verify(lock).tryLock(10, 30, TimeUnit.SECONDS);
+            verify(lock).tryLock(10, -1, TimeUnit.SECONDS);
         }
     }
 
@@ -95,10 +95,10 @@ class DistributedLockServiceTest {
         @Test
         void lockAcquired_operationSucceeds_returnsValue() throws InterruptedException {
             when(redissonClient.getLock("key1")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(lock.isHeldByCurrentThread()).thenReturn(true);
 
-            Optional<String> result = service.executeWithLock("key1", () -> "hello", 10, 30);
+            Optional<String> result = service.executeWithLock("key1", () -> "hello", 10, -1);
 
             assertThat(result).contains("hello");
             verify(lock).unlock();
@@ -107,10 +107,10 @@ class DistributedLockServiceTest {
         @Test
         void lockAcquired_operationReturnsNull_returnsEmpty() throws InterruptedException {
             when(redissonClient.getLock("key")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(lock.isHeldByCurrentThread()).thenReturn(true);
 
-            Optional<String> result = service.executeWithLock("key", () -> null, 10, 30);
+            Optional<String> result = service.executeWithLock("key", () -> null, 10, -1);
 
             assertThat(result).isEmpty();
             verify(lock).unlock();
@@ -119,13 +119,13 @@ class DistributedLockServiceTest {
         @Test
         void lockAcquired_operationThrows_rethrowsAndUnlocks() throws InterruptedException {
             when(redissonClient.getLock("key")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(lock.isHeldByCurrentThread()).thenReturn(true);
 
             assertThatThrownBy(() ->
                     service.executeWithLock("key", () -> {
                         throw new RuntimeException("boom");
-                    }, 10, 30)
+                    }, 10, -1)
             ).isInstanceOf(RuntimeException.class).hasMessage("boom");
 
             // unlock must still be called in the finally block
@@ -135,13 +135,13 @@ class DistributedLockServiceTest {
         @Test
         void lockAcquired_operationThrows_metricsRecordFailure() throws InterruptedException {
             when(redissonClient.getLock("key")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(lock.isHeldByCurrentThread()).thenReturn(true);
 
             try {
                 service.executeWithLock("key", () -> {
                     throw new RuntimeException("fail");
-                }, 10, 30);
+                }, 10, -1);
             } catch (RuntimeException ignored) {
             }
 
@@ -154,10 +154,10 @@ class DistributedLockServiceTest {
         @Test
         void lockNotAcquired_tryLockFalse_returnsEmpty() throws InterruptedException {
             when(redissonClient.getLock("key")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(false);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(false);
             when(lock.isHeldByCurrentThread()).thenReturn(false);
 
-            Optional<String> result = service.executeWithLock("key", () -> "x", 10, 30);
+            Optional<String> result = service.executeWithLock("key", () -> "x", 10, -1);
 
             assertThat(result).isEmpty();
             verify(lock, never()).unlock();
@@ -166,10 +166,10 @@ class DistributedLockServiceTest {
         @Test
         void lockNotAcquired_timeoutMetricRecorded() throws InterruptedException {
             when(redissonClient.getLock("key")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(false);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(false);
             when(lock.isHeldByCurrentThread()).thenReturn(false);
 
-            service.executeWithLock("key", () -> "x", 10, 30);
+            service.executeWithLock("key", () -> "x", 10, -1);
 
             DistributedLockService.LockMetrics.LockStats stats =
                     service.getMetrics().getAllStats().get("key");
@@ -183,7 +183,7 @@ class DistributedLockServiceTest {
                     .thenThrow(new InterruptedException("interrupted"));
             when(lock.isHeldByCurrentThread()).thenReturn(false);
 
-            Optional<String> result = service.executeWithLock("key", () -> "x", 10, 30);
+            Optional<String> result = service.executeWithLock("key", () -> "x", 10, -1);
 
             assertThat(result).isEmpty();
             // Verify that interrupt flag was restored
@@ -195,23 +195,23 @@ class DistributedLockServiceTest {
         @Test
         void unlockThrows_exceptionIsSwallowed_doesNotPropagate() throws InterruptedException {
             when(redissonClient.getLock("key")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(lock.isHeldByCurrentThread()).thenReturn(true);
             doThrow(new IllegalMonitorStateException("not locked")).when(lock).unlock();
 
             // Must not throw
             assertThatNoException().isThrownBy(() ->
-                    service.executeWithLock("key", () -> "ok", 10, 30));
+                    service.executeWithLock("key", () -> "ok", 10, -1));
         }
 
         @Test
         void lockNotHeldByCurrentThread_unlockNotCalled() throws InterruptedException {
             when(redissonClient.getLock("key")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             // Simulate lock no longer held (e.g., lease expired before finally)
             when(lock.isHeldByCurrentThread()).thenReturn(false);
 
-            service.executeWithLock("key", () -> "ok", 10, 30);
+            service.executeWithLock("key", () -> "ok", 10, -1);
 
             verify(lock, never()).unlock();
         }
@@ -219,10 +219,10 @@ class DistributedLockServiceTest {
         @Test
         void metricsRecordAttemptAndAcquiredAndSuccess() throws InterruptedException {
             when(redissonClient.getLock("key")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(lock.isHeldByCurrentThread()).thenReturn(true);
 
-            service.executeWithLock("key", () -> "result", 10, 30);
+            service.executeWithLock("key", () -> "result", 10, -1);
 
             DistributedLockService.LockMetrics.LockStats stats =
                     service.getMetrics().getAllStats().get("key");
@@ -243,7 +243,7 @@ class DistributedLockServiceTest {
         @Test
         void tokenNotNull_operationExecutes_returnsValue() throws Exception {
             when(redissonClient.getFencedLock("fkey")).thenReturn(fencedLock);
-            when(fencedLock.tryLockAndGetToken(10, 30, TimeUnit.SECONDS)).thenReturn(42L);
+            when(fencedLock.tryLockAndGetToken(10, -1, TimeUnit.SECONDS)).thenReturn(42L);
             when(fencedLock.isHeldByCurrentThread()).thenReturn(true);
 
             Optional<String> result = service.executeWithFencedLock("fkey",
@@ -256,7 +256,7 @@ class DistributedLockServiceTest {
         @Test
         void tokenNull_timeout_returnsEmpty() throws Exception {
             when(redissonClient.getFencedLock("fkey")).thenReturn(fencedLock);
-            when(fencedLock.tryLockAndGetToken(10, 30, TimeUnit.SECONDS)).thenReturn(null);
+            when(fencedLock.tryLockAndGetToken(10, -1, TimeUnit.SECONDS)).thenReturn(null);
             when(fencedLock.isHeldByCurrentThread()).thenReturn(false);
 
             Optional<String> result = service.executeWithFencedLock("fkey", token -> "x");
@@ -268,7 +268,7 @@ class DistributedLockServiceTest {
         @Test
         void operationThrows_wrappedInRuntimeException() throws Exception {
             when(redissonClient.getFencedLock("fkey")).thenReturn(fencedLock);
-            when(fencedLock.tryLockAndGetToken(10, 30, TimeUnit.SECONDS)).thenReturn(1L);
+            when(fencedLock.tryLockAndGetToken(10, -1, TimeUnit.SECONDS)).thenReturn(1L);
             when(fencedLock.isHeldByCurrentThread()).thenReturn(true);
 
             assertThatThrownBy(() ->
@@ -286,7 +286,7 @@ class DistributedLockServiceTest {
         @Test
         void operationThrows_metricsRecordFailure() throws Exception {
             when(redissonClient.getFencedLock("fkey")).thenReturn(fencedLock);
-            when(fencedLock.tryLockAndGetToken(10, 30, TimeUnit.SECONDS)).thenReturn(1L);
+            when(fencedLock.tryLockAndGetToken(10, -1, TimeUnit.SECONDS)).thenReturn(1L);
             when(fencedLock.isHeldByCurrentThread()).thenReturn(true);
 
             try {
@@ -304,7 +304,7 @@ class DistributedLockServiceTest {
         @Test
         void unlockThrows_exceptionSwallowed() throws Exception {
             when(redissonClient.getFencedLock("fkey")).thenReturn(fencedLock);
-            when(fencedLock.tryLockAndGetToken(10, 30, TimeUnit.SECONDS)).thenReturn(1L);
+            when(fencedLock.tryLockAndGetToken(10, -1, TimeUnit.SECONDS)).thenReturn(1L);
             when(fencedLock.isHeldByCurrentThread()).thenReturn(true);
             doThrow(new IllegalMonitorStateException("err")).when(fencedLock).unlock();
 
@@ -315,7 +315,7 @@ class DistributedLockServiceTest {
         @Test
         void timeoutMetricRecorded_whenTokenNull() throws Exception {
             when(redissonClient.getFencedLock("fkey")).thenReturn(fencedLock);
-            when(fencedLock.tryLockAndGetToken(10, 30, TimeUnit.SECONDS)).thenReturn(null);
+            when(fencedLock.tryLockAndGetToken(10, -1, TimeUnit.SECONDS)).thenReturn(null);
             when(fencedLock.isHeldByCurrentThread()).thenReturn(false);
 
             service.executeWithFencedLock("fkey", token -> "x");
@@ -341,7 +341,7 @@ class DistributedLockServiceTest {
 
         @Test
         void readLockAcquired_operationExecutes_returnsValue() throws InterruptedException {
-            when(readLock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(readLock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(readLock.isHeldByCurrentThread()).thenReturn(true);
 
             Optional<String> result = service.executeWithReadLock("rwkey", () -> "data");
@@ -352,7 +352,7 @@ class DistributedLockServiceTest {
 
         @Test
         void readLockTimeout_returnsEmpty() throws InterruptedException {
-            when(readLock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(false);
+            when(readLock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(false);
             when(readLock.isHeldByCurrentThread()).thenReturn(false);
 
             Optional<String> result = service.executeWithReadLock("rwkey", () -> "data");
@@ -376,7 +376,7 @@ class DistributedLockServiceTest {
 
         @Test
         void readLockNotHeldAfterOperation_unlockSkipped() throws InterruptedException {
-            when(readLock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(readLock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(readLock.isHeldByCurrentThread()).thenReturn(false);
 
             service.executeWithReadLock("rwkey", () -> "data");
@@ -400,7 +400,7 @@ class DistributedLockServiceTest {
 
         @Test
         void writeLockAcquired_operationExecutes_returnsValue() throws InterruptedException {
-            when(writeLock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(writeLock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(writeLock.isHeldByCurrentThread()).thenReturn(true);
 
             Optional<String> result = service.executeWithWriteLock("rwkey", () -> "written");
@@ -411,7 +411,7 @@ class DistributedLockServiceTest {
 
         @Test
         void writeLockTimeout_returnsEmpty() throws InterruptedException {
-            when(writeLock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(false);
+            when(writeLock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(false);
             when(writeLock.isHeldByCurrentThread()).thenReturn(false);
 
             Optional<String> result = service.executeWithWriteLock("rwkey", () -> "written");
@@ -435,7 +435,7 @@ class DistributedLockServiceTest {
 
         @Test
         void writeLockNotHeldAfterOperation_unlockSkipped() throws InterruptedException {
-            when(writeLock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(writeLock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(writeLock.isHeldByCurrentThread()).thenReturn(false);
 
             service.executeWithWriteLock("rwkey", () -> "written");
@@ -454,7 +454,7 @@ class DistributedLockServiceTest {
         @Test
         void fairLockAcquired_operationExecutes_returnsValue() throws InterruptedException {
             when(redissonClient.getFairLock("flock")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(lock.isHeldByCurrentThread()).thenReturn(true);
 
             Optional<String> result = service.executeWithFairLock("flock", () -> "fair-result");
@@ -466,7 +466,7 @@ class DistributedLockServiceTest {
         @Test
         void fairLockTimeout_returnsEmpty() throws InterruptedException {
             when(redissonClient.getFairLock("flock")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(false);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(false);
             when(lock.isHeldByCurrentThread()).thenReturn(false);
 
             Optional<String> result = service.executeWithFairLock("flock", () -> "x");
@@ -491,7 +491,7 @@ class DistributedLockServiceTest {
         @Test
         void fairLockNotHeld_unlockSkipped() throws InterruptedException {
             when(redissonClient.getFairLock("flock")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(lock.isHeldByCurrentThread()).thenReturn(false);
 
             service.executeWithFairLock("flock", () -> "x");
@@ -511,20 +511,20 @@ class DistributedLockServiceTest {
         void spinLockAcquired_usesWaitTimeOf5_returnsValue() throws InterruptedException {
             when(redissonClient.getSpinLock("slock")).thenReturn(lock);
             // waitTime must be 5 (not the default 10)
-            when(lock.tryLock(5, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(5, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(lock.isHeldByCurrentThread()).thenReturn(true);
 
             Optional<String> result = service.executeWithSpinLock("slock", () -> "spin-result");
 
             assertThat(result).contains("spin-result");
-            verify(lock).tryLock(5, 30, TimeUnit.SECONDS);
+            verify(lock).tryLock(5, -1, TimeUnit.SECONDS);
             verify(lock).unlock();
         }
 
         @Test
         void spinLockTimeout_returnsEmpty() throws InterruptedException {
             when(redissonClient.getSpinLock("slock")).thenReturn(lock);
-            when(lock.tryLock(5, 30, TimeUnit.SECONDS)).thenReturn(false);
+            when(lock.tryLock(5, -1, TimeUnit.SECONDS)).thenReturn(false);
             when(lock.isHeldByCurrentThread()).thenReturn(false);
 
             Optional<String> result = service.executeWithSpinLock("slock", () -> "x");
@@ -549,7 +549,7 @@ class DistributedLockServiceTest {
         @Test
         void spinLockNotHeld_unlockSkipped() throws InterruptedException {
             when(redissonClient.getSpinLock("slock")).thenReturn(lock);
-            when(lock.tryLock(5, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(5, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(lock.isHeldByCurrentThread()).thenReturn(false);
 
             service.executeWithSpinLock("slock", () -> "x");
@@ -686,7 +686,7 @@ class DistributedLockServiceTest {
             String expectedLockKey = "sharded_lock_" + expectedShard;
 
             when(redissonClient.getLock(expectedLockKey)).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(lock.isHeldByCurrentThread()).thenReturn(true);
 
             Optional<String> result = service.executeWithShardedLock("user123", () -> "sharded");
@@ -703,7 +703,7 @@ class DistributedLockServiceTest {
 
             String lockKey = "sharded_lock_" + shard1;
             when(redissonClient.getLock(lockKey)).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(lock.isHeldByCurrentThread()).thenReturn(true);
 
             service.executeWithShardedLock("resource-abc", () -> "x");
@@ -734,7 +734,7 @@ class DistributedLockServiceTest {
         @Test
         void operationSucceeds_futureCompletesWithValue() throws Exception {
             when(redissonClient.getLock("akey")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             when(lock.isHeldByCurrentThread()).thenReturn(true);
 
             CompletableFuture<Optional<String>> future =
@@ -747,7 +747,7 @@ class DistributedLockServiceTest {
         @Test
         void lockNotAcquired_futureCompletesWithEmpty() throws Exception {
             when(redissonClient.getLock("akey")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(false);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(false);
             when(lock.isHeldByCurrentThread()).thenReturn(false);
 
             CompletableFuture<Optional<String>> future =
@@ -766,7 +766,7 @@ class DistributedLockServiceTest {
             DistributedLockService svc = new DistributedLockService(redissonClient, throwingExecutor);
 
             when(redissonClient.getLock("ex-key")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(true);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(true);
             // Simulate the operation throwing; isHeldByCurrentThread throws so the
             // finally block itself raises an exception that escapes executeWithLock,
             // which means the CompletableFuture completes exceptionally.
@@ -785,7 +785,7 @@ class DistributedLockServiceTest {
         @Test
         void futureIsNotNull() throws Exception {
             when(redissonClient.getLock("akey")).thenReturn(lock);
-            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(false);
+            when(lock.tryLock(10, -1, TimeUnit.SECONDS)).thenReturn(false);
 
             CompletableFuture<Optional<String>> future =
                     service.executeWithLockAsync("akey", () -> "val");

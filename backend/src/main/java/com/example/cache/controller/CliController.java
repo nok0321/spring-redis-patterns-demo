@@ -28,7 +28,7 @@ public class CliController {
 
     /** 読み取り専用コマンド（常に許可） */
     private static final Set<String> ALLOWED_COMMANDS = Set.of(
-            "GET", "SET", "KEYS", "SCAN", "TTL", "PTTL", "TYPE",
+            "GET", "SET", "SCAN", "TTL", "PTTL", "TYPE",
             "INFO", "LLEN", "HGETALL", "SMEMBERS", "ZRANGE", "ZCARD",
             "STRLEN", "MEMORY", "SLOWLOG"
     );
@@ -117,14 +117,6 @@ public class CliController {
                 String setValue = String.join(" ", java.util.Arrays.copyOfRange(parts, 2, parts.length));
                 redissonClient.<String>getBucket(parts[1]).set(setValue);
                 yield "OK";
-            }
-            case "KEYS" -> {
-                String pattern = parts.length > 1 ? parts[1] : "*";
-                var keys = new java.util.ArrayList<String>();
-                redissonClient.getKeys().getKeysStream(
-                    new org.redisson.api.options.KeysScanParams().pattern(pattern).limit(100)
-                ).forEach(keys::add);
-                yield keys;
             }
             case "TTL" -> {
                 if (parts.length < 2) yield "ERR: TTL requires a key";

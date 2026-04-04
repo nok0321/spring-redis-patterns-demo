@@ -367,8 +367,8 @@ class ResilientCacheServiceTest {
     void cacheMetrics_recordAndRead() {
         ResilientCacheService.CacheMetrics metrics = new ResilientCacheService.CacheMetrics();
 
-        metrics.recordOperation("get");
-        metrics.recordOperation("set");
+        metrics.recordOperation();
+        metrics.recordOperation();
         metrics.recordRedisHit();
         metrics.recordFallback();
         metrics.recordError();
@@ -384,7 +384,7 @@ class ResilientCacheServiceTest {
     @Test
     void cacheMetrics_reset_clearsAllCounters() {
         ResilientCacheService.CacheMetrics metrics = new ResilientCacheService.CacheMetrics();
-        metrics.recordOperation("get");
+        metrics.recordOperation();
         metrics.recordRedisHit();
         metrics.recordFallback();
         metrics.recordError();
@@ -407,7 +407,7 @@ class ResilientCacheServiceTest {
     @Test
     void cacheMetrics_toString_containsStats() {
         ResilientCacheService.CacheMetrics metrics = new ResilientCacheService.CacheMetrics();
-        metrics.recordOperation("get");
+        metrics.recordOperation();
         metrics.recordRedisHit();
 
         String str = metrics.toString();
