@@ -47,9 +47,14 @@ test.describe('Prometheus', () => {
 });
 
 test.describe('Grafana', () => {
+  const grafanaAuth = {
+    headers: {
+      Authorization: `Basic ${Buffer.from(`admin:${process.env.GRAFANA_ADMIN_PASSWORD ?? 'admin'}`).toString('base64')}`,
+    },
+  };
 
   test('ダッシュボードが存在する', async ({ request }) => {
-    const res = await request.fetch('http://localhost:3000/api/search?type=dash-db');
+    const res = await request.fetch('http://localhost:3000/api/search?type=dash-db', grafanaAuth);
     expect(res.status()).toBe(200);
     const dashboards = await res.json() as Array<{ uid: string; title: string }>;
     expect(dashboards.length).toBeGreaterThan(0);
@@ -59,14 +64,14 @@ test.describe('Grafana', () => {
   });
 
   test('ダッシュボードが editable: false に設定されている', async ({ request }) => {
-    const res = await request.fetch('http://localhost:3000/api/dashboards/uid/spring-boot-redis');
+    const res = await request.fetch('http://localhost:3000/api/dashboards/uid/spring-boot-redis', grafanaAuth);
     expect(res.status()).toBe(200);
     const body = await res.json();
     expect(body.dashboard.editable).toBe(false);
   });
 
   test('データソース（Prometheus + Loki）がプロビジョニングされている', async ({ request }) => {
-    const res = await request.fetch('http://localhost:3000/api/datasources');
+    const res = await request.fetch('http://localhost:3000/api/datasources', grafanaAuth);
     expect(res.status()).toBe(200);
     const datasources = await res.json() as Array<{ type: string; name: string }>;
     const types = datasources.map(d => d.type);
