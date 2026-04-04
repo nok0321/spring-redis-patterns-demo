@@ -97,4 +97,31 @@ class SecurityConfigIT {
         mockMvc.perform(post("/api/lock/release"))
                 .andExpect(status().isForbidden());
     }
+
+    // --- Actuator endpoints ---
+
+    @Test
+    void actuator_health_accessible_without_auth() throws Exception {
+        mockMvc.perform(get("/actuator/health"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void actuator_prometheus_rejected_without_api_key() throws Exception {
+        mockMvc.perform(get("/actuator/prometheus"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void actuator_prometheus_accessible_with_valid_api_key() throws Exception {
+        mockMvc.perform(get("/actuator/prometheus")
+                        .header("X-API-Key", TEST_API_KEY))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void actuator_metrics_rejected_without_api_key() throws Exception {
+        mockMvc.perform(get("/actuator/metrics"))
+                .andExpect(status().isForbidden());
+    }
 }
