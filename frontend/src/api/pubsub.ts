@@ -1,5 +1,4 @@
-import { apiFetch } from './client';
-import { getBaseUrl } from './client';
+import { apiFetch, getBaseUrl } from './client';
 
 export const pubsubApi = {
   publish: (topic: string, message: string) =>

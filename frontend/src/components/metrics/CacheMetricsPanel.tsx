@@ -1,5 +1,6 @@
 import type { CacheMetrics } from '../../types/cache';
 import { MetricsDonutChart } from './MetricsDonutChart';
+import { MetricsTrendChart } from './MetricsTrendChart';
 
 interface Props {
   data: CacheMetrics | null;
@@ -9,7 +10,12 @@ interface Props {
 
 const DONUT_COLORS = ['#10B981', '#F59E0B', '#EF4444'];
 
-export function CacheMetricsPanel({ data, isLoading, trendData: _trendData }: Props) {
+const TREND_LINES = [
+  { dataKey: 'operations', color: '#60A5FA', label: '操作数' },
+  { dataKey: 'hits', color: '#10B981', label: 'ヒット数' },
+];
+
+export function CacheMetricsPanel({ data, isLoading, trendData }: Props) {
   if (isLoading) {
     return (
       <div className="bg-gray-800 rounded-lg p-4">
@@ -59,6 +65,11 @@ export function CacheMetricsPanel({ data, isLoading, trendData: _trendData }: Pr
       <div>
         <h3 className="text-gray-400 text-sm mb-2">操作の内訳</h3>
         <MetricsDonutChart data={donutData} height={220} />
+      </div>
+
+      <div className="mt-4">
+        <h3 className="text-gray-400 text-sm mb-2">トレンド</h3>
+        <MetricsTrendChart data={trendData} lines={TREND_LINES} height={200} />
       </div>
     </div>
   );
