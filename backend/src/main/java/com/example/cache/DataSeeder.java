@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * デモ用キャッシュデータのシーダー
@@ -23,12 +22,12 @@ public class DataSeeder {
 
     private static final Logger logger = LoggerFactory.getLogger(DataSeeder.class);
 
-    private final ExecutorService virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
-
+    private final ExecutorService virtualExecutor;
     private final RedissonClient redissonClient;
 
-    public DataSeeder(RedissonClient redissonClient) {
+    public DataSeeder(RedissonClient redissonClient, ExecutorService virtualThreadExecutor) {
         this.redissonClient = redissonClient;
+        this.virtualExecutor = virtualThreadExecutor;
     }
 
     /** キーが存在しない場合のみ設定する（冪等シード・アトミック）*/

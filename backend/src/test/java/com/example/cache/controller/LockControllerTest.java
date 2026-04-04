@@ -61,10 +61,10 @@ class LockControllerTest {
     }
 
     @Test
-    void acquireLock_returns200WithCanAcquire() throws Exception {
+    void checkLockStatus_returns200WithCanAcquire() throws Exception {
         when(lockService.isLocked("mylock")).thenReturn(false);
 
-        mockMvc.perform(post("/api/lock/acquire")
+        mockMvc.perform(post("/api/lock/check-status")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"lockKey\":\"mylock\",\"lockType\":\"standard\"}"))
                 .andExpect(status().isOk())
@@ -73,8 +73,8 @@ class LockControllerTest {
     }
 
     @Test
-    void acquireLock_missingLockKey_returns400() throws Exception {
-        mockMvc.perform(post("/api/lock/acquire")
+    void checkLockStatus_missingLockKey_returns400() throws Exception {
+        mockMvc.perform(post("/api/lock/check-status")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"lockType\":\"standard\"}"))
                 .andExpect(status().isBadRequest());

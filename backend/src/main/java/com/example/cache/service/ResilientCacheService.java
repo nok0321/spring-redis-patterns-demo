@@ -23,7 +23,7 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
@@ -72,12 +72,13 @@ public class ResilientCacheService {
     public ResilientCacheService(RedissonClient redissonClient,
                                  CircuitBreakerRegistry circuitBreakerRegistry,
                                  RetryRegistry retryRegistry,
-                                 RateLimiterRegistry rateLimiterRegistry) {
+                                 RateLimiterRegistry rateLimiterRegistry,
+                                 ExecutorService virtualThreadExecutor) {
         this.redissonClient = redissonClient;
         this.circuitBreaker = circuitBreakerRegistry.circuitBreaker("cache-operations");
         this.retry = retryRegistry.retry("default");
         this.rateLimiter = rateLimiterRegistry.rateLimiter("default");
-        this.virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
+        this.virtualExecutor = virtualThreadExecutor;
     }
 
     // メトリクス収集用
@@ -133,20 +134,19 @@ public class ResilientCacheService {
                 .decorate()
                 .get();
 
-        // Redis成功時はローカルキャッシュを更新（write-through戦略）
+        // Redis取得成功時のメトリクス記録
         result.ifPresent(value -> {
             metrics.recordRedisHit();
-            logger.debug("Redis取得成功、ローカルキャッシュ更新: key={}", key);
+            logger.debug("Redis取得成功: key={}", key);
         });
 
         return result;
     }
 
     /**
-     * 非同期での値設定（write-through方式）
+     * 非同期での値設定
      *
-     * Redisとローカルキャッシュの両方に書き込みを行い、
-     * 一貫性を保つwrite-through戦略を採用
+     * Redisへの書き込みを回復力パターンで保護して実行する。
      *
      * Java 21のVirtual Threadsを使用して効率的な並行処理を実現：
      * - OS Thread消費を最小化
@@ -181,9 +181,8 @@ public class ResilientCacheService {
                     .decorate()
                     .get();
 
-            // Redis書き込み成功時はローカルキャッシュも更新
             if (redisResult) {
-                logger.debug("write-through完了: key={}", key);
+                logger.debug("Redis書き込み完了: key={}", key);
             }
 
             return redisResult;
@@ -193,13 +192,9 @@ public class ResilientCacheService {
     /**
      * バッチ取得操作（部分的成功ハンドリング付き）
      *
-     * 大量のキーを効率的に処理する戦略：
-     * 1. ローカルキャッシュから可能な限り取得
-     * 2. 不足分のみRedisから取得
-     * 3. 部分的な失敗でも成功分は返却
-     *
-     * この戦略により、ネットワーク通信を最小化し、
-     * 障害時でも利用可能なデータは提供できます
+     * 大量のキーをRedisから効率的に取得する。
+     * 部分的な失敗でも成功分は返却し、障害時でも
+     * 利用可能なデータを提供する
      *
      * @param keys 取得するキーのセット
      * @return キーと値のマップ（取得できたもののみ）

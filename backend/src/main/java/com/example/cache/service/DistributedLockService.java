@@ -1,6 +1,5 @@
 package com.example.cache.service;
 
-import jakarta.annotation.PostConstruct;
 import org.redisson.api.*;
 import org.redisson.api.RFencedLock;
 import org.slf4j.Logger;
@@ -70,8 +69,7 @@ import java.util.function.Supplier;
 public class DistributedLockService {
     private static final Logger logger = LoggerFactory.getLogger(DistributedLockService.class);
 
-    // Virtual Thread Executor — インスタンスごとに生成し、テスト時のコンテキスト再起動でも安全に動作する
-    private ExecutorService virtualExecutor;
+    private final ExecutorService virtualExecutor;
 
     // ロック設定定数
     private static final int DEFAULT_WAIT_TIME_SECONDS = 10; // デフォルト待機時間
@@ -82,13 +80,9 @@ public class DistributedLockService {
 
     private final RedissonClient redissonClient;
 
-    public DistributedLockService(RedissonClient redissonClient) {
+    public DistributedLockService(RedissonClient redissonClient, ExecutorService virtualThreadExecutor) {
         this.redissonClient = redissonClient;
-    }
-
-    @PostConstruct
-    public void init() {
-        this.virtualExecutor = Executors.newVirtualThreadPerTaskExecutor();
+        this.virtualExecutor = virtualThreadExecutor;
     }
 
     // メトリクス追跡用

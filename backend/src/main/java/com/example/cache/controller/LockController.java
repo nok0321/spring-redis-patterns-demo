@@ -79,13 +79,13 @@ public class LockController {
                 "timestamp", System.currentTimeMillis()));
     }
 
-    @Operation(summary = "ロック取得チェック", description = "ロックが取得可能かを確認する（実際には取得しない）。lockType: standard/read/write")
+    @Operation(summary = "ロック状態確認", description = "指定キーのロック状態を確認する（ロックの取得は行わない）。lockType: standard/read/write")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "確認成功"),
         @ApiResponse(responseCode = "400", description = "lockKey が未指定")
     })
-    @PostMapping("/acquire")
-    public ResponseEntity<Map<String, Object>> acquireLock(
+    @PostMapping("/check-status")
+    public ResponseEntity<Map<String, Object>> checkLockStatus(
             @RequestBody Map<String, Object> body) {
 
         String lockKey = (String) body.get("lockKey");
