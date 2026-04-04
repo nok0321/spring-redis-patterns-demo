@@ -7,6 +7,7 @@ import org.redisson.api.RTransaction;
 import org.redisson.client.RedisConnectionException;
 import org.redisson.client.RedisTimeoutException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.http.MediaType;
@@ -14,9 +15,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
-import java.util.function.Supplier;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -24,6 +23,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(LockController.class)
+@AutoConfigureMockMvc(addFilters = false)
 @TestPropertySource(properties = "demo.features.enabled=true")
 class LockControllerTest {
 
@@ -37,10 +37,10 @@ class LockControllerTest {
     TransactionalLockService transactionalLockService;
 
     @MockitoBean
-    ResilientCacheService cacheService;
+    LockDemoService lockDemoService;
 
     @MockitoBean
-    LockDemoService lockDemoService;
+    LockDemoOrchestrator lockDemoOrchestrator;
 
     @Test
     void getLockStatus_locked_returnsTrue() throws Exception {
@@ -142,7 +142,8 @@ class LockControllerTest {
 
     @Test
     void executeWithLock_unknownOperation_returns400() throws Exception {
-        when(lockService.executeWithLock(eq("mylock"), any())).thenReturn(Optional.empty());
+        when(lockDemoOrchestrator.executeLockOperation(eq("mylock"), eq("unknown_op"), any()))
+                .thenReturn(Optional.empty());
 
         mockMvc.perform(post("/api/lock/execute")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -152,10 +153,8 @@ class LockControllerTest {
 
     @Test
     void executeWithLock_cacheUpdate_returns200() throws Exception {
-        when(lockService.executeWithLock(eq("mylock"), any()))
+        when(lockDemoOrchestrator.executeLockOperation(eq("mylock"), eq("cache_update"), any()))
                 .thenReturn(Optional.of(Map.of("status", "updated", "keys", Set.of("k1"))));
-        when(cacheService.setAsync(anyString(), any(), any()))
-                .thenReturn(java.util.concurrent.CompletableFuture.completedFuture(true));
 
         mockMvc.perform(post("/api/lock/execute")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -268,10 +267,8 @@ class LockControllerTest {
         fencedResult.put("found", false);
         fencedResult.put("value", null);
         fencedResult.put("type", "String");
-        when(lockService.executeWithFencedLock(eq("flock"), any()))
+        when(lockDemoOrchestrator.executeFencedOperation(eq("flock"), eq("fenced_cache_read"), any()))
                 .thenReturn(Optional.of(fencedResult));
-        when(cacheService.get(anyString(), any(), isNull()))
-                .thenReturn(Optional.empty());
 
         mockMvc.perform(post("/api/lock/acquire-fenced")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -281,6 +278,9 @@ class LockControllerTest {
 
     @Test
     void acquireFencedLock_unknownOperation_returns400() throws Exception {
+        when(lockDemoOrchestrator.executeFencedOperation(eq("flock"), eq("unknown_op"), any()))
+                .thenReturn(Optional.empty());
+
         mockMvc.perform(post("/api/lock/acquire-fenced")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"lockKey\":\"flock\",\"operation\":\"unknown_op\",\"data\":{}}"))
@@ -297,10 +297,8 @@ class LockControllerTest {
         readResult.put("found", false);
         readResult.put("value", null);
         readResult.put("type", "String");
-        when(lockService.executeWithReadLock(eq("rlock"), any()))
+        when(lockDemoOrchestrator.executeLockOperation(eq("rlock"), eq("cache_read"), any()))
                 .thenReturn(Optional.of(readResult));
-        when(cacheService.get(anyString(), any(), isNull()))
-                .thenReturn(Optional.empty());
 
         mockMvc.perform(post("/api/lock/execute")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -310,10 +308,8 @@ class LockControllerTest {
 
     @Test
     void executeWithLock_batchRead_returns200() throws Exception {
-        when(lockService.executeWithReadLock(eq("rlock"), any()))
+        when(lockDemoOrchestrator.executeLockOperation(eq("rlock"), eq("batch_read"), any()))
                 .thenReturn(Optional.of(Map.of("k1", "v1")));
-        when(cacheService.getBatch(anySet()))
-                .thenReturn(Map.of("k1", "v1"));
 
         mockMvc.perform(post("/api/lock/execute")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -323,12 +319,8 @@ class LockControllerTest {
 
     @Test
     void executeWithLock_atomicIncrement_returns200() throws Exception {
-        when(lockService.executeWithLock(eq("alock"), any()))
+        when(lockDemoOrchestrator.executeLockOperation(eq("alock"), eq("atomic_increment"), any()))
                 .thenReturn(Optional.of(Map.of("key", "counter", "value", 11)));
-        when(cacheService.get(anyString(), eq(Integer.class), any()))
-                .thenReturn(Optional.of(10));
-        when(cacheService.setAsync(anyString(), any(), any()))
-                .thenReturn(CompletableFuture.completedFuture(true));
 
         mockMvc.perform(post("/api/lock/execute")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -406,7 +398,6 @@ class LockControllerTest {
     }
 
     // --- POST /api/lock/demo/run: workers clamping (< 2 → 2, > 8 → 8) ---
-
     @Test
     void runDemo_workersClampedToMin2() throws Exception {
         var events = List.of(new LockDemoService.DemoEvent(1, "READ", 10, 0L));
@@ -432,10 +423,8 @@ class LockControllerTest {
         fencedResult.put("status", "updated");
         fencedResult.put("keys", Set.of("k1"));
         fencedResult.put("keyCount", 1);
-        when(lockService.executeWithFencedLock(eq("flock"), any()))
+        when(lockDemoOrchestrator.executeFencedOperation(eq("flock"), eq("fenced_cache_update"), any()))
                 .thenReturn(Optional.of(fencedResult));
-        when(cacheService.setAsync(anyString(), any(), any()))
-                .thenReturn(CompletableFuture.completedFuture(true));
 
         mockMvc.perform(post("/api/lock/acquire-fenced")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -454,7 +443,7 @@ class LockControllerTest {
         fencedResult.put("operationType", "write");
         fencedResult.put("status", "completed");
         fencedResult.put("executedAt", System.currentTimeMillis());
-        when(lockService.executeWithFencedLock(eq("flock"), any()))
+        when(lockDemoOrchestrator.executeFencedOperation(eq("flock"), eq("fenced_critical_section"), any()))
                 .thenReturn(Optional.of(fencedResult));
 
         mockMvc.perform(post("/api/lock/acquire-fenced")
@@ -486,10 +475,8 @@ class LockControllerTest {
         fencedResult.put("currentValue", null);
         fencedResult.put("expectedValue", "old");
         fencedResult.put("newValue", null);
-        when(lockService.executeWithFencedLock(eq("flock"), any()))
+        when(lockDemoOrchestrator.executeFencedOperation(eq("flock"), eq("fenced_conditional_update"), any()))
                 .thenReturn(Optional.of(fencedResult));
-        when(cacheService.get(anyString(), any(), any()))
-                .thenReturn(Optional.empty());
 
         mockMvc.perform(post("/api/lock/acquire-fenced")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -611,7 +598,7 @@ class LockControllerTest {
     }
 
     // =========================================================================
-    // Group A: acquireFencedLock lambda execution tests (thenAnswer)
+    // Group A: acquireFencedLock operation tests (via orchestrator mock)
     // =========================================================================
 
     @Test
@@ -631,13 +618,15 @@ class LockControllerTest {
 
     @Test
     void acquireFencedLock_fencedCacheRead_lambdaExecuted_valueFound() throws Exception {
-        when(lockService.executeWithFencedLock(anyString(), any())).thenAnswer(inv -> {
-            DistributedLockService.FencedOperation<Object> op = inv.getArgument(1);
-            Object result = op.execute(42L);
-            return Optional.of(result);
-        });
-        when(cacheService.get(eq("mykey"), eq(Object.class), isNull()))
-                .thenReturn(Optional.of("hello"));
+        Map<String, Object> orchestratorResult = new HashMap<>();
+        orchestratorResult.put("operation", "fenced_cache_read");
+        orchestratorResult.put("fencingToken", 42L);
+        orchestratorResult.put("key", "mykey");
+        orchestratorResult.put("found", true);
+        orchestratorResult.put("value", "hello");
+        orchestratorResult.put("type", "Object");
+        when(lockDemoOrchestrator.executeFencedOperation(eq("k1"), eq("fenced_cache_read"), any()))
+                .thenReturn(Optional.of(orchestratorResult));
 
         mockMvc.perform(post("/api/lock/acquire-fenced")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -648,13 +637,15 @@ class LockControllerTest {
 
     @Test
     void acquireFencedLock_fencedCacheRead_lambdaExecuted_valueAbsent() throws Exception {
-        when(lockService.executeWithFencedLock(anyString(), any())).thenAnswer(inv -> {
-            DistributedLockService.FencedOperation<Object> op = inv.getArgument(1);
-            Object result = op.execute(42L);
-            return Optional.of(result);
-        });
-        when(cacheService.get(eq("mykey"), eq(Object.class), isNull()))
-                .thenReturn(Optional.empty());
+        Map<String, Object> orchestratorResult = new HashMap<>();
+        orchestratorResult.put("operation", "fenced_cache_read");
+        orchestratorResult.put("fencingToken", 42L);
+        orchestratorResult.put("key", "mykey");
+        orchestratorResult.put("found", false);
+        orchestratorResult.put("value", null);
+        orchestratorResult.put("type", "Object");
+        when(lockDemoOrchestrator.executeFencedOperation(eq("k1"), eq("fenced_cache_read"), any()))
+                .thenReturn(Optional.of(orchestratorResult));
 
         mockMvc.perform(post("/api/lock/acquire-fenced")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -665,13 +656,14 @@ class LockControllerTest {
 
     @Test
     void acquireFencedLock_fencedCacheUpdate_lambdaExecuted() throws Exception {
-        when(lockService.executeWithFencedLock(anyString(), any())).thenAnswer(inv -> {
-            DistributedLockService.FencedOperation<Object> op = inv.getArgument(1);
-            Object result = op.execute(42L);
-            return Optional.of(result);
-        });
-        when(cacheService.setAsync(anyString(), any(), any()))
-                .thenReturn(CompletableFuture.completedFuture(true));
+        Map<String, Object> orchestratorResult = new HashMap<>();
+        orchestratorResult.put("operation", "fenced_cache_update");
+        orchestratorResult.put("fencingToken", 42L);
+        orchestratorResult.put("status", "updated");
+        orchestratorResult.put("keys", Set.of("key"));
+        orchestratorResult.put("keyCount", 1);
+        when(lockDemoOrchestrator.executeFencedOperation(eq("k1"), eq("fenced_cache_update"), any()))
+                .thenReturn(Optional.of(orchestratorResult));
 
         mockMvc.perform(post("/api/lock/acquire-fenced")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -682,11 +674,15 @@ class LockControllerTest {
 
     @Test
     void acquireFencedLock_fencedCriticalSection_lambdaExecuted() throws Exception {
-        when(lockService.executeWithFencedLock(anyString(), any())).thenAnswer(inv -> {
-            DistributedLockService.FencedOperation<Object> op = inv.getArgument(1);
-            Object result = op.execute(42L);
-            return Optional.of(result);
-        });
+        Map<String, Object> orchestratorResult = new HashMap<>();
+        orchestratorResult.put("operation", "fenced_critical_section");
+        orchestratorResult.put("fencingToken", 42L);
+        orchestratorResult.put("resourceKey", "res1");
+        orchestratorResult.put("operationType", "lock");
+        orchestratorResult.put("status", "completed");
+        orchestratorResult.put("executedAt", System.currentTimeMillis());
+        when(lockDemoOrchestrator.executeFencedOperation(eq("k1"), eq("fenced_critical_section"), any()))
+                .thenReturn(Optional.of(orchestratorResult));
 
         mockMvc.perform(post("/api/lock/acquire-fenced")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -697,15 +693,15 @@ class LockControllerTest {
 
     @Test
     void acquireFencedLock_fencedAtomicIncrement_lambdaExecuted() throws Exception {
-        when(lockService.executeWithFencedLock(anyString(), any())).thenAnswer(inv -> {
-            DistributedLockService.FencedOperation<Object> op = inv.getArgument(1);
-            Object result = op.execute(42L);
-            return Optional.of(result);
-        });
-        when(cacheService.get(eq("ctr"), eq(Integer.class), any()))
-                .thenReturn(Optional.of(10));
-        when(cacheService.setAsync(eq("ctr"), eq(15), any()))
-                .thenReturn(CompletableFuture.completedFuture(true));
+        Map<String, Object> orchestratorResult = new HashMap<>();
+        orchestratorResult.put("operation", "fenced_atomic_increment");
+        orchestratorResult.put("fencingToken", 42L);
+        orchestratorResult.put("key", "ctr");
+        orchestratorResult.put("previousValue", 10);
+        orchestratorResult.put("newValue", 15);
+        orchestratorResult.put("increment", 5);
+        when(lockDemoOrchestrator.executeFencedOperation(eq("k1"), eq("fenced_atomic_increment"), any()))
+                .thenReturn(Optional.of(orchestratorResult));
 
         mockMvc.perform(post("/api/lock/acquire-fenced")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -716,15 +712,16 @@ class LockControllerTest {
 
     @Test
     void acquireFencedLock_fencedConditionalUpdate_conditionTrue() throws Exception {
-        when(lockService.executeWithFencedLock(anyString(), any())).thenAnswer(inv -> {
-            DistributedLockService.FencedOperation<Object> op = inv.getArgument(1);
-            Object result = op.execute(42L);
-            return Optional.of(result);
-        });
-        when(cacheService.get(eq("k1"), eq(Object.class), isNull()))
-                .thenReturn(Optional.of("old"));
-        when(cacheService.setAsync(eq("k1"), eq("new"), any()))
-                .thenReturn(CompletableFuture.completedFuture(true));
+        Map<String, Object> orchestratorResult = new HashMap<>();
+        orchestratorResult.put("operation", "fenced_conditional_update");
+        orchestratorResult.put("fencingToken", 42L);
+        orchestratorResult.put("key", "k1");
+        orchestratorResult.put("updated", true);
+        orchestratorResult.put("currentValue", "old");
+        orchestratorResult.put("expectedValue", "old");
+        orchestratorResult.put("newValue", "new");
+        when(lockDemoOrchestrator.executeFencedOperation(eq("k1"), eq("fenced_conditional_update"), any()))
+                .thenReturn(Optional.of(orchestratorResult));
 
         mockMvc.perform(post("/api/lock/acquire-fenced")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -735,13 +732,16 @@ class LockControllerTest {
 
     @Test
     void acquireFencedLock_fencedConditionalUpdate_conditionFalse() throws Exception {
-        when(lockService.executeWithFencedLock(anyString(), any())).thenAnswer(inv -> {
-            DistributedLockService.FencedOperation<Object> op = inv.getArgument(1);
-            Object result = op.execute(42L);
-            return Optional.of(result);
-        });
-        when(cacheService.get(eq("k1"), eq(Object.class), isNull()))
-                .thenReturn(Optional.of("other"));
+        Map<String, Object> orchestratorResult = new HashMap<>();
+        orchestratorResult.put("operation", "fenced_conditional_update");
+        orchestratorResult.put("fencingToken", 42L);
+        orchestratorResult.put("key", "k1");
+        orchestratorResult.put("updated", false);
+        orchestratorResult.put("currentValue", "other");
+        orchestratorResult.put("expectedValue", "old");
+        orchestratorResult.put("newValue", null);
+        when(lockDemoOrchestrator.executeFencedOperation(eq("k1"), eq("fenced_conditional_update"), any()))
+                .thenReturn(Optional.of(orchestratorResult));
 
         mockMvc.perform(post("/api/lock/acquire-fenced")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -752,13 +752,16 @@ class LockControllerTest {
 
     @Test
     void acquireFencedLock_fencedConditionalUpdate_keyAbsent() throws Exception {
-        when(lockService.executeWithFencedLock(anyString(), any())).thenAnswer(inv -> {
-            DistributedLockService.FencedOperation<Object> op = inv.getArgument(1);
-            Object result = op.execute(42L);
-            return Optional.of(result);
-        });
-        when(cacheService.get(eq("k1"), eq(Object.class), isNull()))
-                .thenReturn(Optional.empty());
+        Map<String, Object> orchestratorResult = new HashMap<>();
+        orchestratorResult.put("operation", "fenced_conditional_update");
+        orchestratorResult.put("fencingToken", 42L);
+        orchestratorResult.put("key", "k1");
+        orchestratorResult.put("updated", false);
+        orchestratorResult.put("currentValue", null);
+        orchestratorResult.put("expectedValue", "old");
+        orchestratorResult.put("newValue", null);
+        when(lockDemoOrchestrator.executeFencedOperation(eq("k1"), eq("fenced_conditional_update"), any()))
+                .thenReturn(Optional.of(orchestratorResult));
 
         mockMvc.perform(post("/api/lock/acquire-fenced")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -768,17 +771,13 @@ class LockControllerTest {
     }
 
     // =========================================================================
-    // Group B: executeWithLock / executeWithReadLock lambda execution tests
+    // Group B: executeWithLock / executeWithReadLock operation tests (via orchestrator)
     // =========================================================================
 
     @Test
     void executeWithLock_cacheUpdate_lambdaExecuted() throws Exception {
-        when(lockService.executeWithLock(anyString(), any())).thenAnswer(inv -> {
-            Supplier<Object> op = inv.getArgument(1);
-            return Optional.of(op.get());
-        });
-        when(cacheService.setAsync(anyString(), any(), any()))
-                .thenReturn(CompletableFuture.completedFuture(true));
+        when(lockDemoOrchestrator.executeLockOperation(eq("k1"), eq("cache_update"), any()))
+                .thenReturn(Optional.of(Map.of("status", "updated", "keys", Set.of("k1"))));
 
         mockMvc.perform(post("/api/lock/execute")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -789,12 +788,13 @@ class LockControllerTest {
 
     @Test
     void executeWithLock_cacheRead_lambdaExecuted_valueFound() throws Exception {
-        when(lockService.executeWithReadLock(anyString(), any())).thenAnswer(inv -> {
-            Supplier<Object> op = inv.getArgument(1);
-            return Optional.of(op.get());
-        });
-        when(cacheService.get(eq("mykey"), eq(Object.class), isNull()))
-                .thenReturn(Optional.of("val"));
+        Map<String, Object> readResult = new HashMap<>();
+        readResult.put("key", "mykey");
+        readResult.put("found", true);
+        readResult.put("value", "val");
+        readResult.put("type", "Object");
+        when(lockDemoOrchestrator.executeLockOperation(eq("k1"), eq("cache_read"), any()))
+                .thenReturn(Optional.of(readResult));
 
         mockMvc.perform(post("/api/lock/execute")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -806,12 +806,13 @@ class LockControllerTest {
 
     @Test
     void executeWithLock_cacheRead_lambdaExecuted_valueAbsent() throws Exception {
-        when(lockService.executeWithReadLock(anyString(), any())).thenAnswer(inv -> {
-            Supplier<Object> op = inv.getArgument(1);
-            return Optional.of(op.get());
-        });
-        when(cacheService.get(eq("mykey"), eq(Object.class), isNull()))
-                .thenReturn(Optional.empty());
+        Map<String, Object> readResult = new HashMap<>();
+        readResult.put("key", "mykey");
+        readResult.put("found", false);
+        readResult.put("value", null);
+        readResult.put("type", "Object");
+        when(lockDemoOrchestrator.executeLockOperation(eq("k1"), eq("cache_read"), any()))
+                .thenReturn(Optional.of(readResult));
 
         mockMvc.perform(post("/api/lock/execute")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -822,12 +823,8 @@ class LockControllerTest {
 
     @Test
     void executeWithLock_batchRead_lambdaExecuted() throws Exception {
-        when(lockService.executeWithReadLock(anyString(), any())).thenAnswer(inv -> {
-            Supplier<Object> op = inv.getArgument(1);
-            return Optional.of(op.get());
-        });
-        when(cacheService.getBatch(any()))
-                .thenReturn(Map.of("k1", "v1", "k2", "v2"));
+        when(lockDemoOrchestrator.executeLockOperation(eq("k1"), eq("batch_read"), any()))
+                .thenReturn(Optional.of(Map.of("k1", "v1", "k2", "v2")));
 
         mockMvc.perform(post("/api/lock/execute")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -838,14 +835,8 @@ class LockControllerTest {
 
     @Test
     void executeWithLock_atomicIncrement_lambdaExecuted() throws Exception {
-        when(lockService.executeWithLock(anyString(), any())).thenAnswer(inv -> {
-            Supplier<Object> op = inv.getArgument(1);
-            return Optional.of(op.get());
-        });
-        when(cacheService.get(eq("ctr"), eq(Integer.class), any()))
-                .thenReturn(Optional.of(7));
-        when(cacheService.setAsync(eq("ctr"), eq(10), any()))
-                .thenReturn(CompletableFuture.completedFuture(true));
+        when(lockDemoOrchestrator.executeLockOperation(eq("k1"), eq("atomic_increment"), any()))
+                .thenReturn(Optional.of(Map.of("key", "ctr", "value", 10)));
 
         mockMvc.perform(post("/api/lock/execute")
                         .contentType(MediaType.APPLICATION_JSON)

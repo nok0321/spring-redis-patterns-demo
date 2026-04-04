@@ -1,3 +1,6 @@
+api:
+  key: ${API_KEY:}
+
 spring:
   application:
     name: cache-service
@@ -50,12 +53,20 @@ resilience4j:
           - org.redisson.client.RedisConnectionException
           - org.redisson.client.RedisTimeoutException
           - java.io.IOException
+  # NOTE: この Resilience4j ratelimiter 設定は参照用に残している。
+  # キャッシュ操作のレート制限は Redis バックエンドの分散レートリミッター
+  # (DistributedRateLimiterService / Redisson RRateLimiter) に移行済み。
   ratelimiter:
     instances:
       default:
         limit-for-period: 100
         limit-refresh-period: 1s
         timeout-duration: 100ms
+
+# Redis バックエンド分散レートリミッター設定
+ratelimiter:
+  rate: 100      # インターバルあたりの最大リクエスト数
+  interval: 1    # レートインターバル（秒）
 
 logging:
   level:

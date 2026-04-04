@@ -13,7 +13,7 @@ import java.util.concurrent.Executors;
 @Configuration
 public class VirtualThreadConfig {
 
-    @Bean
+    @Bean(destroyMethod = "close")
     public ExecutorService virtualThreadExecutor() {
         return Executors.newVirtualThreadPerTaskExecutor();
     }

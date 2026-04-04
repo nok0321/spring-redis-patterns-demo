@@ -3,10 +3,12 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { AppShell } from '../../../components/layout/AppShell'
 
-// Mock getBaseUrl / setBaseUrl
+// Mock getBaseUrl / setBaseUrl / getApiKey / setApiKey
 vi.mock('../../../api/client', () => ({
   getBaseUrl: vi.fn(() => ''),
   setBaseUrl: vi.fn(),
+  getApiKey: vi.fn(() => ''),
+  setApiKey: vi.fn(),
 }))
 
 // Mock healthApi so polling doesn't hit real network

@@ -1,5 +1,6 @@
 package com.example.cache.controller;
 
+import com.example.cache.service.CacheMetadataService;
 import com.example.cache.service.ResilientCacheService;
 import com.example.cache.util.TypeResolver;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
@@ -8,7 +9,6 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.redisson.api.RedissonClient;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,9 +20,6 @@ import java.time.Duration;
 import java.time.format.DateTimeParseException;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -32,11 +29,10 @@ import java.util.concurrent.TimeoutException;
 public class CacheController {
 
     private static final Logger logger = LoggerFactory.getLogger(CacheController.class);
-    private final ExecutorService virtualExecutor;
 
     private final ResilientCacheService cacheService;
     private final CircuitBreakerRegistry circuitBreakerRegistry;
-    private final RedissonClient redissonClient;
+    private final CacheMetadataService cacheMetadataService;
 
     /** デモ用危険エンドポイントの有効フラグ。本番環境では false にすること */
     @Value("${demo.features.enabled:false}")
@@ -44,12 +40,10 @@ public class CacheController {
 
     public CacheController(ResilientCacheService cacheService,
                            CircuitBreakerRegistry circuitBreakerRegistry,
-                           RedissonClient redissonClient,
-                           ExecutorService virtualThreadExecutor) {
+                           CacheMetadataService cacheMetadataService) {
         this.cacheService = cacheService;
         this.circuitBreakerRegistry = circuitBreakerRegistry;
-        this.redissonClient = redissonClient;
-        this.virtualExecutor = virtualThreadExecutor;
+        this.cacheMetadataService = cacheMetadataService;
     }
 
     @Operation(summary = "キャッシュ取得", description = "指定したキーの値を取得する。type パラメータで型を指定可能（String/Integer/Map 等）")
@@ -62,8 +56,8 @@ public class CacheController {
             @Parameter(description = "Redis キー") @PathVariable String key,
             @Parameter(description = "値の型（String/Integer/Long/Double/Boolean/Map/List）") @RequestParam(required = false) String type) {
 
-        var keyError = validateKey(key);
-        if (keyError != null) return keyError;
+        Optional<ResponseEntity<Map<String, Object>>> keyError = validateKey(key);
+        if (keyError.isPresent()) return keyError.get();
 
         Class<?> valueClass = type != null ? TypeResolver.fromString(type) : String.class;
         Optional<?> value = cacheService.get(key, valueClass, null);
@@ -115,20 +109,20 @@ public class CacheController {
 
     /**
      * キーの基本検証。null/空チェックと最大長チェックを行う。
-     * 問題があれば 400 Bad Request を返す ResponseEntity、問題なければ null を返す。
+     * 問題があれば 400 Bad Request を含む Optional、問題なければ空の Optional を返す。
      */
-    private ResponseEntity<Map<String, Object>> validateKey(String key) {
+    private Optional<ResponseEntity<Map<String, Object>>> validateKey(String key) {
         if (key == null || key.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of(
+            return Optional.of(ResponseEntity.badRequest().body(Map.of(
                     "error", "Key is required",
-                    "timestamp", System.currentTimeMillis()));
+                    "timestamp", System.currentTimeMillis())));
         }
         if (key.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > KEY_MAX_BYTES) {
-            return ResponseEntity.badRequest().body(Map.of(
+            return Optional.of(ResponseEntity.badRequest().body(Map.of(
                     "error", "Key exceeds maximum length of " + KEY_MAX_BYTES + " bytes",
-                    "timestamp", System.currentTimeMillis()));
+                    "timestamp", System.currentTimeMillis())));
         }
-        return null;
+        return Optional.empty();
     }
 
     @Operation(summary = "キー検索", description = "glob パターンでキーを検索する（例: user:*）。最大1000件")
@@ -182,8 +176,8 @@ public class CacheController {
             @Parameter(description = "Redis キー") @PathVariable String key,
             @RequestBody Map<String, Object> body) {
 
-        var keyError = validateKey(key);
-        if (keyError != null) return keyError;
+        Optional<ResponseEntity<Map<String, Object>>> keyError = validateKey(key);
+        if (keyError.isPresent()) return keyError.get();
 
         Object value = body.get("value");
         if (value == null) {
@@ -327,8 +321,8 @@ public class CacheController {
     public ResponseEntity<Map<String, Object>> deleteCache(
             @PathVariable String key) {
 
-        var keyError = validateKey(key);
-        if (keyError != null) return keyError;
+        Optional<ResponseEntity<Map<String, Object>>> keyError = validateKey(key);
+        if (keyError.isPresent()) return keyError.get();
 
         boolean success = cacheService.delete(key);
 
@@ -383,7 +377,7 @@ public class CacheController {
 
     // ----------------------------------------------------------------
     // Feature 4: TTL エンドポイント
-    // NOTE: TTL / 型情報の取得は ResilientCacheService を経由せず RedissonClient を直接使用している。
+    // NOTE: TTL / 型情報の取得は CacheMetadataService に委譲する。
     // これらのメタデータ操作は Resilience4j デコレータを通す必要がないため意図的な設計である。
     // ----------------------------------------------------------------
 
@@ -394,19 +388,19 @@ public class CacheController {
     })
     @GetMapping("/ttl/{key}")
     public ResponseEntity<Map<String, Object>> getTtl(@Parameter(description = "Redis キー") @PathVariable String key) {
-        var keyError = validateKey(key);
-        if (keyError != null) return keyError;
-        long ttlMs = redissonClient.getBucket(key).remainTimeToLive();
-        if (ttlMs == -2) {
-            return ResponseEntity.notFound().build();
-        }
-        boolean persistent = (ttlMs == -1);
-        Map<String, Object> result = new HashMap<>();
-        result.put("key", key);
-        result.put("ttlMs", ttlMs);
-        result.put("ttlSeconds", persistent ? -1 : ttlMs / 1000);
-        result.put("persistent", persistent);
-        return ResponseEntity.ok(result);
+        Optional<ResponseEntity<Map<String, Object>>> keyError = validateKey(key);
+        if (keyError.isPresent()) return keyError.get();
+
+        return cacheMetadataService.getTtl(key)
+                .map(info -> {
+                    Map<String, Object> result = new HashMap<>();
+                    result.put("key", key);
+                    result.put("ttlMs", info.ttlMs());
+                    result.put("ttlSeconds", info.ttlSeconds());
+                    result.put("persistent", info.persistent());
+                    return ResponseEntity.ok(result);
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Operation(summary = "TTL バッチ取得", description = "カンマ区切りキー一覧の TTL を一括取得する（最大500キー）")
@@ -424,19 +418,9 @@ public class CacheController {
                     "error", "Too many keys: max " + batchKeysMax + " allowed",
                     "timestamp", System.currentTimeMillis()));
         }
-        Map<String, Object> results = new ConcurrentHashMap<>();
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
-        for (String key : keyArray) {
-            String k = key.trim();
-            if (k.isEmpty()) continue;
-            futures.add(CompletableFuture.runAsync(() -> {
-                long ttlMs = redissonClient.getBucket(k).remainTimeToLive();
-                boolean persistent = (ttlMs == -1);
-                results.put(k, Map.of("ttlMs", ttlMs, "persistent", persistent));
-            }, virtualExecutor));
-        }
         try {
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get(5, TimeUnit.SECONDS);
+            Map<String, Map<String, Object>> results = cacheMetadataService.getTtlBatch(keyArray);
+            return ResponseEntity.ok(Map.of("results", results));
         } catch (TimeoutException e) {
             logger.warn("TTL batch request timed out after 5s");
             return ResponseEntity.status(HttpStatus.GATEWAY_TIMEOUT).body(Map.of(
@@ -447,13 +431,13 @@ public class CacheController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                     "error", "Request interrupted",
                     "timestamp", System.currentTimeMillis()));
-        } catch (ExecutionException e) {
-            logger.error("TTL batch fetch failed", e.getCause());
+        } catch (Exception e) {
+            logger.error("TTL batch fetch failed", e.getCause() != null ? e.getCause() : e);
+            Throwable cause = e.getCause() != null ? e.getCause() : e;
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                    "error", "TTL fetch failed: " + e.getCause().getMessage(),
+                    "error", "TTL fetch failed: " + cause.getMessage(),
                     "timestamp", System.currentTimeMillis()));
         }
-        return ResponseEntity.ok(Map.of("results", results));
     }
 
     // ----------------------------------------------------------------
@@ -467,13 +451,12 @@ public class CacheController {
     })
     @GetMapping("/type/{key}")
     public ResponseEntity<Map<String, Object>> getKeyType(@Parameter(description = "Redis キー") @PathVariable String key) {
-        var keyError = validateKey(key);
-        if (keyError != null) return keyError;
-        org.redisson.api.RType type = redissonClient.getKeys().getType(key);
-        if (type == null) {
-            return ResponseEntity.notFound().build();
-        }
-        return ResponseEntity.ok(Map.of("key", key, "type", type.name()));
+        Optional<ResponseEntity<Map<String, Object>>> keyError = validateKey(key);
+        if (keyError.isPresent()) return keyError.get();
+
+        return cacheMetadataService.getKeyType(key)
+                .map(typeName -> ResponseEntity.ok(Map.<String, Object>of("key", key, "type", typeName)))
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @Operation(summary = "型付きキャッシュ取得", description = "Redis データ型に応じた適切な読み取り方法でキーの値を取得する")
@@ -484,36 +467,24 @@ public class CacheController {
     })
     @GetMapping("/get-typed/{key}")
     public ResponseEntity<Map<String, Object>> getTyped(@Parameter(description = "Redis キー") @PathVariable String key) {
-        var keyError = validateKey(key);
-        if (keyError != null) return keyError;
-        org.redisson.api.RType type = redissonClient.getKeys().getType(key);
-        if (type == null) {
-            return ResponseEntity.notFound().build();
-        }
+        Optional<ResponseEntity<Map<String, Object>>> keyError = validateKey(key);
+        if (keyError.isPresent()) return keyError.get();
+
         try {
-            Object value = switch (type) {
-                case OBJECT  -> redissonClient.getBucket(key).get();
-                case MAP     -> redissonClient.getMap(key).readAllMap();
-                case LIST    -> redissonClient.getList(key).readAll();
-                case SET     -> redissonClient.getSet(key).readAll();
-                case ZSET    -> {
-                    var sset = redissonClient.<Object>getScoredSortedSet(key);
-                    yield sset.readAll();
-                }
-                case STREAM  -> "(Stream type: use Redis CLI for XRANGE/XREAD)";
-                default -> redissonClient.getBucket(key).get();
-            };
-            Map<String, Object> result = new HashMap<>();
-            result.put("key", key);
-            result.put("type", type.name());
-            result.put("value", value);
-            return ResponseEntity.ok(result);
+            return cacheMetadataService.getTypedValue(key)
+                    .map(tv -> {
+                        Map<String, Object> result = new HashMap<>();
+                        result.put("key", tv.key());
+                        result.put("type", tv.type());
+                        result.put("value", tv.value());
+                        return ResponseEntity.ok(result);
+                    })
+                    .orElseGet(() -> ResponseEntity.notFound().build());
         } catch (Exception e) {
-            logger.warn("get-typed failed for key={}, type={}", key, type, e);
+            logger.warn("get-typed failed for key={}", key, e);
             return ResponseEntity.internalServerError().body(Map.of(
                     "error", "Failed to read key",
                     "key", key,
-                    "type", type.name(),
                     "timestamp", System.currentTimeMillis()));
         }
     }

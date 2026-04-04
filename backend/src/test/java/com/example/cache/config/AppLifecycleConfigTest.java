@@ -1,8 +1,6 @@
 package com.example.cache.config;
 
-import com.example.cache.config.AppShutdownCoordinator;
 import com.example.cache.service.DistributedLockService;
-import com.example.cache.service.ResilientCacheService;
 import com.example.cache.service.TransactionalLockService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,9 +12,6 @@ import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class AppLifecycleConfigTest {
-
-    @Mock
-    ResilientCacheService cacheService;
 
     @Mock
     DistributedLockService lockService;
@@ -33,7 +28,6 @@ class AppLifecycleConfigTest {
 
         verify(transactionalLockService).shutdown();
         verify(lockService).shutdown();
-        verify(cacheService).shutdown();
     }
 
     @Test
@@ -44,6 +38,5 @@ class AppLifecycleConfigTest {
         appLifecycleConfig.onShutdown();
 
         verify(lockService).shutdown();
-        verify(cacheService).shutdown();
     }
 }

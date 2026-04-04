@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 interface AddKeyModalProps {
   isOpen: boolean;
@@ -8,6 +9,7 @@ interface AddKeyModalProps {
 }
 
 export function AddKeyModal({ isOpen, onClose, onAdd }: AddKeyModalProps) {
+  const containerRef = useFocusTrap(isOpen, onClose);
   const [key, setKey] = useState('');
   const [rawValue, setRawValue] = useState('');
   const [ttl, setTtl] = useState('');
@@ -55,7 +57,7 @@ export function AddKeyModal({ isOpen, onClose, onAdd }: AddKeyModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="addkey-dialog-title">
+    <div ref={containerRef} className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="addkey-dialog-title">
       <div className="bg-gray-800 rounded-lg p-6 max-w-md w-full mx-4">
         <div className="flex items-center justify-between mb-4">
           <h3 id="addkey-dialog-title" className="text-white font-semibold">新規キー追加</h3>

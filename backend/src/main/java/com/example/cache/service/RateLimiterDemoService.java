@@ -1,9 +1,5 @@
 package com.example.cache.service;
 
-import io.github.resilience4j.ratelimiter.RateLimiter;
-import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
-import io.github.resilience4j.ratelimiter.RequestNotPermitted;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -11,13 +7,13 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Rate Limiter デモサービス
+ * Redis バックエンドの分散レートリミッター（{@link DistributedRateLimiterService}）を使用して
  * トークンバケットアルゴリズムの動作をシミュレートする
  */
 @Service
@@ -25,10 +21,10 @@ public class RateLimiterDemoService {
 
     private static final Logger logger = LoggerFactory.getLogger(RateLimiterDemoService.class);
 
-    private final RateLimiterRegistry rateLimiterRegistry;
+    private final DistributedRateLimiterService distributedRateLimiter;
 
-    public RateLimiterDemoService(RateLimiterRegistry rateLimiterRegistry) {
-        this.rateLimiterRegistry = rateLimiterRegistry;
+    public RateLimiterDemoService(DistributedRateLimiterService distributedRateLimiter) {
+        this.distributedRateLimiter = distributedRateLimiter;
     }
 
     public record FloodEvent(int workerId, boolean permitted, long relativeMs) {}
@@ -37,6 +33,13 @@ public class RateLimiterDemoService {
 
     /**
      * Rate Limiter の現在のステータスを取得する
+     *
+     * コントローラーの API レスポンス形式との互換性を維持するため、
+     * 分散レートリミッターの状態を既存フィールドにマッピングする：
+     * - availablePermissions ← Redis RRateLimiter の availablePermits
+     * - numberOfWaitingThreads ← 分散環境では取得不可なため常に 0
+     * - cyclePeriodMs ← RRateLimiter の rateInterval（ミリ秒）
+     * - limitForPeriod ← RRateLimiter の rate
      */
     public record RateLimiterStatus(
         int availablePermissions,
@@ -46,13 +49,12 @@ public class RateLimiterDemoService {
     ) {}
 
     public RateLimiterStatus getRateLimiterStatus() {
-        RateLimiter rl = rateLimiterRegistry.rateLimiter("default");
-        RateLimiter.Metrics metrics = rl.getMetrics();
+        DistributedRateLimiterService.Status status = distributedRateLimiter.getStatus();
         return new RateLimiterStatus(
-            metrics.getAvailablePermissions(),
-            metrics.getNumberOfWaitingThreads(),
-            rl.getRateLimiterConfig().getLimitRefreshPeriod().toMillis(),
-            rl.getRateLimiterConfig().getLimitForPeriod()
+            (int) status.availablePermits(),
+            0, // 分散環境では待機スレッド数は取得不可
+            status.intervalMs(),
+            (int) status.rate()
         );
     }
 
@@ -63,7 +65,6 @@ public class RateLimiterDemoService {
      * @param burstCount 各ワーカーが発行するリクエスト数
      */
     public FloodResult executeFlood(int workers, int burstCount) {
-        RateLimiter rl = rateLimiterRegistry.rateLimiter("default");
         long startMs = System.currentTimeMillis();
 
         List<FloodEvent> events = Collections.synchronizedList(new ArrayList<>());
@@ -84,12 +85,7 @@ public class RateLimiterDemoService {
                     try { go.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
 
                     for (int i = 0; i < burstCount; i++) {
-                        boolean ok;
-                        try {
-                            ok = rl.acquirePermission();
-                        } catch (RequestNotPermitted e) {
-                            ok = false;
-                        }
+                        boolean ok = distributedRateLimiter.tryAcquire();
                         long relMs = System.currentTimeMillis() - startMs;
                         events.add(new FloodEvent(workerId, ok, relMs));
                         if (ok) permitted.incrementAndGet(); else rejected.incrementAndGet();

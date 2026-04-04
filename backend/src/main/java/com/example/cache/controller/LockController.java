@@ -1,10 +1,9 @@
 package com.example.cache.controller;
 
 import com.example.cache.service.DistributedLockService;
+import com.example.cache.service.LockDemoOrchestrator;
 import com.example.cache.service.LockDemoService;
-import com.example.cache.service.ResilientCacheService;
 import com.example.cache.service.TransactionalLockService;
-import com.example.cache.util.TypeResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -18,9 +17,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 
 @Tag(name = "Lock", description = "Redis 分散ロック・フェンスドロック・トランザクション・転送・デモ操作")
 @RestController
@@ -31,8 +28,8 @@ public class LockController {
 
     private final DistributedLockService lockService;
     private final TransactionalLockService transactionalLockService;
-    private final ResilientCacheService cacheService;
     private final LockDemoService lockDemoService;
+    private final LockDemoOrchestrator lockDemoOrchestrator;
 
     /** デモ用危険操作（forceUnlock）の有効フラグ。本番環境では false にすること */
     @Value("${demo.features.enabled:false}")
@@ -40,12 +37,12 @@ public class LockController {
 
     public LockController(DistributedLockService lockService,
                           TransactionalLockService transactionalLockService,
-                          ResilientCacheService cacheService,
-                          LockDemoService lockDemoService) {
+                          LockDemoService lockDemoService,
+                          LockDemoOrchestrator lockDemoOrchestrator) {
         this.lockService = lockService;
         this.transactionalLockService = transactionalLockService;
-        this.cacheService = cacheService;
         this.lockDemoService = lockDemoService;
+        this.lockDemoOrchestrator = lockDemoOrchestrator;
     }
 
     @Operation(summary = "ロック状態確認", description = "指定したロックキーが現在ロック中か確認する")
@@ -155,101 +152,7 @@ public class LockController {
                     "timestamp", System.currentTimeMillis()));
         }
 
-        Optional<Map<String, Object>> result = switch (operation) {
-            case "fenced_cache_read" -> lockService.executeWithFencedLock(lockKey, (Long fencingToken) -> {
-                String readKey = (String) data.get("key");
-                if (readKey == null) throw new IllegalArgumentException("'key' is required for fenced_cache_read");
-                String type = (String) data.getOrDefault("type", "Object");
-                Class<?> valueClass = TypeResolver.fromString(type);
-
-                Optional<?> value = cacheService.get(readKey, valueClass, null);
-                Map<String, Object> r = new HashMap<>();
-                r.put("operation", "fenced_cache_read");
-                r.put("fencingToken", fencingToken);
-                r.put("key", readKey);
-                r.put("found", value.isPresent());
-                r.put("value", value.orElse(null));
-                r.put("type", type);
-                return r;
-            });
-
-            case "fenced_cache_update" -> lockService.executeWithFencedLock(lockKey, (Long fencingToken) -> {
-                List<CompletableFuture<Boolean>> setFutures = new ArrayList<>();
-                data.forEach((key, value) -> setFutures.add(cacheService.setAsync(key, value, Duration.ofHours(1))));
-                CompletableFuture.allOf(setFutures.toArray(new CompletableFuture[0])).join();
-                return Map.<String, Object>of(
-                        "operation", "fenced_cache_update",
-                        "fencingToken", fencingToken,
-                        "status", "updated",
-                        "keys", data.keySet(),
-                        "keyCount", data.size());
-            });
-
-            case "fenced_critical_section" -> lockService.executeWithFencedLock(lockKey, (Long fencingToken) -> {
-                String resourceKey = (String) data.get("resourceKey");
-                String operationType = (String) data.get("operationType");
-
-                logger.info("Executing critical section with fencing token: {}", fencingToken);
-
-                return Map.<String, Object>of(
-                        "operation", "fenced_critical_section",
-                        "fencingToken", fencingToken,
-                        "resourceKey", resourceKey,
-                        "operationType", operationType,
-                        "status", "completed",
-                        "executedAt", System.currentTimeMillis());
-            });
-
-            case "fenced_atomic_increment" -> lockService.executeWithFencedLock(lockKey, (Long fencingToken) -> {
-                String counterKey = (String) data.get("counterKey");
-                if (counterKey == null) throw new IllegalArgumentException("'counterKey' is required for fenced_atomic_increment");
-                Number incrementNum = (Number) data.get("increment");
-                if (incrementNum == null) throw new IllegalArgumentException("'increment' is required for fenced_atomic_increment");
-                int increment = incrementNum.intValue();
-
-                Optional<Integer> current = cacheService.get(counterKey, Integer.class, () -> 0);
-                int newValue = current.orElse(0) + increment;
-
-                cacheService.setAsync(counterKey, newValue, Duration.ofDays(1)).join();
-
-                return Map.<String, Object>of(
-                        "operation", "fenced_atomic_increment",
-                        "fencingToken", fencingToken,
-                        "key", counterKey,
-                        "previousValue", current.orElse(0),
-                        "newValue", newValue,
-                        "increment", increment);
-            });
-
-            case "fenced_conditional_update" -> lockService.executeWithFencedLock(lockKey, (Long fencingToken) -> {
-                String targetKey = (String) data.get("key");
-                if (targetKey == null) throw new IllegalArgumentException("'key' is required for fenced_conditional_update");
-                Object expectedValue = data.get("expectedValue");
-                Object newValue = data.get("newValue");
-                String type = (String) data.getOrDefault("type", "Object");
-                Class<?> valueClass = TypeResolver.fromString(type);
-
-                Optional<?> currentValue = cacheService.get(targetKey, valueClass, null);
-                boolean updated = false;
-
-                if (currentValue.isPresent() && currentValue.get().equals(expectedValue)) {
-                    cacheService.setAsync(targetKey, newValue, Duration.ofHours(1)).join();
-                    updated = true;
-                }
-
-                Map<String, Object> r = new HashMap<>();
-                r.put("operation", "fenced_conditional_update");
-                r.put("fencingToken", fencingToken);
-                r.put("key", targetKey);
-                r.put("updated", updated);
-                r.put("currentValue", currentValue.orElse(null));
-                r.put("expectedValue", expectedValue);
-                r.put("newValue", updated ? newValue : null);
-                return r;
-            });
-
-            default -> Optional.empty();
-        };
+        Optional<Map<String, Object>> result = lockDemoOrchestrator.executeFencedOperation(lockKey, operation, data);
 
         if (result.isPresent()) {
             Map<String, Object> responseData = new HashMap<>(result.get());
@@ -327,46 +230,7 @@ public class LockController {
                     "timestamp", System.currentTimeMillis()));
         }
 
-        Optional<Map<String, Object>> result = switch (operation) {
-            case "cache_update" -> lockService.executeWithLock(lockKey, () -> {
-                List<CompletableFuture<Boolean>> setFutures = new ArrayList<>();
-                data.forEach((key, value) -> setFutures.add(cacheService.setAsync(key, value, Duration.ofHours(1))));
-                CompletableFuture.allOf(setFutures.toArray(new CompletableFuture[0])).join();
-                return Map.<String, Object>of("status", "updated", "keys", data.keySet());
-            });
-
-            case "cache_read" -> lockService.executeWithReadLock(lockKey, () -> {
-                String readKey = (String) data.get("key");
-                String type = (String) data.getOrDefault("type", "Object");
-                Class<?> valueClass = TypeResolver.fromString(type);
-
-                Optional<?> value = cacheService.get(readKey, valueClass, null);
-                Map<String, Object> r = new HashMap<>();
-                r.put("key", readKey);
-                r.put("found", value.isPresent());
-                r.put("value", value.orElse(null));
-                r.put("type", type);
-                return r;
-            });
-
-            case "batch_read" -> lockService.executeWithReadLock(lockKey, () -> {
-                Set<String> keys = new HashSet<>((List<String>) data.get("keys"));
-                return cacheService.getBatch(keys);
-            });
-
-            case "atomic_increment" -> lockService.executeWithLock(lockKey, () -> {
-                String counterKey = (String) data.get("counterKey");
-                int increment = ((Number) data.get("increment")).intValue();
-
-                Optional<Integer> current = cacheService.get(counterKey, Integer.class, () -> 0);
-                int newValue = current.orElse(0) + increment;
-
-                cacheService.setAsync(counterKey, newValue, Duration.ofDays(1)).join();
-                return Map.<String, Object>of("key", counterKey, "value", newValue);
-            });
-
-            default -> Optional.empty();
-        };
+        Optional<Map<String, Object>> result = lockDemoOrchestrator.executeLockOperation(lockKey, operation, data);
 
         if (result.isPresent()) {
             return ResponseEntity.ok(result.get());

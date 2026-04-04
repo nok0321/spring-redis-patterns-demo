@@ -34,7 +34,7 @@ jobs:
 
       - name: Test + Coverage
         working-directory: backend
-        run: ./gradlew test jacocoTestReport
+        run: ./gradlew test jacocoTestReport jacocoTestCoverageVerification
 
       - name: Upload coverage report
         if: always()
@@ -65,7 +65,7 @@ jobs:
 
       - name: Test
         working-directory: frontend
-        run: npm test
+        run: npm run test:coverage
 
       - name: Build
         working-directory: frontend
