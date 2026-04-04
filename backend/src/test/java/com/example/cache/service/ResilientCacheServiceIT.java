@@ -1,5 +1,7 @@
 package com.example.cache.service;
 
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -37,10 +39,14 @@ class ResilientCacheServiceIT {
     @Autowired
     ResilientCacheService cacheService;
 
+    @Autowired
+    CircuitBreakerRegistry circuitBreakerRegistry;
+
     @BeforeEach
     void setUp() {
         cacheService.getMetrics().reset();
         cacheService.setSimulateError(false);
+        circuitBreakerRegistry.circuitBreaker("cache-operations").reset();
     }
 
     @Test
@@ -118,5 +124,77 @@ class ResilientCacheServiceIT {
 
         Map<String, Long> map = metrics.toMap();
         assertThat(map.get("hitRate")).isEqualTo(70L);
+    }
+
+    // --- Circuit Breaker lifecycle tests ---
+
+    /**
+     * simulateError が投げる RuntimeException はフォールバック対象外のため、
+     * get() は例外を伝播する。CB は失敗として記録し OPEN に遷移する。
+     */
+    private void triggerCircuitBreakerOpen(int calls) {
+        cacheService.setSimulateError(true);
+        for (int i = 0; i < calls; i++) {
+            try {
+                cacheService.get("cb-trip:" + i, String.class, null);
+            } catch (RuntimeException ignored) {
+                // CB に失敗を記録させるため、例外を握りつぶす
+            }
+        }
+    }
+
+    @Test
+    void circuitBreaker_opensAfterRepeatedFailures() {
+        CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("cache-operations");
+
+        // minimum-number-of-calls=3, failure-rate-threshold=60%
+        triggerCircuitBreakerOpen(3);
+
+        assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.OPEN);
+    }
+
+    @Test
+    void circuitBreaker_returnsFallbackWhenOpen() throws Exception {
+        CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("cache-operations");
+
+        // テストデータをセット
+        cacheService.setAsync("cb-fallback:key", "real-value", Duration.ofMinutes(5)).get();
+
+        // CB を OPEN にする
+        triggerCircuitBreakerOpen(3);
+        assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.OPEN);
+
+        // OPEN 状態では CallNotPermittedException → fallback が返る
+        cacheService.setSimulateError(false);
+        Optional<String> result = cacheService.get("cb-fallback:key", String.class,
+                () -> "fallback-value");
+        assertThat(result).isPresent().contains("fallback-value");
+    }
+
+    @Test
+    void circuitBreaker_recoversFromOpenToClosedViaHalfOpen() throws Exception {
+        CircuitBreaker cb = circuitBreakerRegistry.circuitBreaker("cache-operations");
+
+        // テストデータをセット
+        cacheService.setAsync("cb-recover:key", "ok", Duration.ofMinutes(5)).get();
+
+        // CB を OPEN にする
+        triggerCircuitBreakerOpen(3);
+        assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.OPEN);
+
+        // エラー注入を解除し、HALF_OPEN への遷移を待つ（wait-duration-in-open-state=5s）
+        cacheService.setSimulateError(false);
+        Thread.sleep(6_000);
+
+        assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.HALF_OPEN);
+
+        // HALF_OPEN で permitted-number-of-calls-in-half-open-state=3 回成功させる
+        for (int i = 0; i < 3; i++) {
+            Optional<String> probe = cacheService.get("cb-recover:key", String.class, null);
+            assertThat(probe).isPresent().contains("ok");
+        }
+
+        // CB が CLOSED に復旧
+        assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
     }
 }
