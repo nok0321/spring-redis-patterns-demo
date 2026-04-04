@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { apiFetch, getBaseUrl, setBaseUrl } from '../../api/client'
+import { apiFetch, getBaseUrl, setBaseUrl, getApiKey, setApiKey } from '../../api/client'
 
 describe('getBaseUrl / setBaseUrl', () => {
   beforeEach(() => localStorage.clear())
@@ -20,6 +20,20 @@ describe('getBaseUrl / setBaseUrl', () => {
   })
 })
 
+describe('getApiKey / setApiKey', () => {
+  beforeEach(() => localStorage.clear())
+  afterEach(() => localStorage.clear())
+
+  it('getApiKey returns empty string when not set', () => {
+    expect(getApiKey()).toBe('')
+  })
+
+  it('setApiKey stores value and getApiKey returns it', () => {
+    setApiKey('my-secret-key')
+    expect(getApiKey()).toBe('my-secret-key')
+  })
+})
+
 describe('apiFetch', () => {
   beforeEach(() => localStorage.clear())
   afterEach(() => vi.restoreAllMocks())
@@ -33,6 +47,33 @@ describe('apiFetch', () => {
 
     const result = await apiFetch<{ data: string }>('/test')
     expect(result).toEqual({ data: 'test' })
+  })
+
+  it('sends X-API-Key header when API key is set', async () => {
+    setApiKey('test-api-key')
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: 'ok' }),
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await apiFetch('/test')
+
+    const calledHeaders = mockFetch.mock.calls[0][1].headers as Record<string, string>
+    expect(calledHeaders['X-API-Key']).toBe('test-api-key')
+  })
+
+  it('does not send X-API-Key header when no API key is set', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ data: 'ok' }),
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await apiFetch('/test')
+
+    const calledHeaders = mockFetch.mock.calls[0][1].headers as Record<string, string>
+    expect(calledHeaders['X-API-Key']).toBeUndefined()
   })
 
   it('throws error on network failure', async () => {
