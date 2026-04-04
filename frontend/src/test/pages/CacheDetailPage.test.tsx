@@ -67,7 +67,7 @@ describe('CacheDetailPage', () => {
       found: true,
       value: 'Hello, Redis!',
     })
-    mockSet.mockResolvedValue({ key: 'demo:greeting', success: true })
+    mockSet.mockResolvedValue({ key: 'demo:greeting', success: true, ttl: 'PT5M' })
     mockDelete.mockResolvedValue({ key: 'demo:greeting', deleted: true })
   })
 
