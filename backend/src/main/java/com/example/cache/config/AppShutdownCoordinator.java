@@ -1,7 +1,6 @@
 package com.example.cache.config;
 
 import com.example.cache.service.DistributedLockService;
-import com.example.cache.service.ResilientCacheService;
 import com.example.cache.service.TransactionalLockService;
 import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
@@ -15,14 +14,11 @@ public class AppShutdownCoordinator {
 
     private static final Logger logger = LoggerFactory.getLogger(AppShutdownCoordinator.class);
 
-    private final ResilientCacheService cacheService;
     private final DistributedLockService lockService;
     private final TransactionalLockService transactionalLockService;
 
-    public AppShutdownCoordinator(ResilientCacheService cacheService,
-                              DistributedLockService lockService,
+    public AppShutdownCoordinator(DistributedLockService lockService,
                               TransactionalLockService transactionalLockService) {
-        this.cacheService = cacheService;
         this.lockService = lockService;
         this.transactionalLockService = transactionalLockService;
     }
@@ -45,11 +41,5 @@ public class AppShutdownCoordinator {
             logger.error("Error during DistributedLockService shutdown", e);
         }
 
-        try {
-            cacheService.shutdown();
-            logger.info("ResilientCacheService shutdown completed");
-        } catch (Exception e) {
-            logger.error("Error during ResilientCacheService shutdown", e);
-        }
     }
 }

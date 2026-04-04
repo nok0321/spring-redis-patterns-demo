@@ -162,7 +162,7 @@ export function CacheExplorerPage() {
   const handleAddKey = async (key: string, value: unknown, ttl?: number) => {
     await cacheApi.set(key, { value, ttl });
     addToast(`${key} を追加しました`, 'success');
-    await fetchByPattern('*');
+    await fetchByPattern(pattern.trim() || '*');
   };
 
   return (

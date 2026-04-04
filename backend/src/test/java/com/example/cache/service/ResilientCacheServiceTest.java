@@ -3,10 +3,6 @@ package com.example.cache.service;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
-import io.github.resilience4j.ratelimiter.RateLimiter;
-import io.github.resilience4j.ratelimiter.RateLimiterConfig;
-import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
-import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
 import io.github.resilience4j.retry.RetryRegistry;
 import org.junit.jupiter.api.BeforeEach;
@@ -49,10 +45,12 @@ class ResilientCacheServiceTest {
     @Mock
     RBucket<Object> bucket;
 
+    @Mock
+    DistributedRateLimiterService distributedRateLimiter;
+
     private ResilientCacheService service;
     private CircuitBreakerRegistry circuitBreakerRegistry;
     private RetryRegistry retryRegistry;
-    private RateLimiterRegistry rateLimiterRegistry;
     private ExecutorService executor;
 
     @BeforeEach
@@ -69,12 +67,8 @@ class ResilientCacheServiceTest {
                         .maxAttempts(1)
                         .build());
 
-        rateLimiterRegistry = RateLimiterRegistry.of(
-                RateLimiterConfig.custom()
-                        .limitForPeriod(1000)
-                        .limitRefreshPeriod(Duration.ofSeconds(1))
-                        .timeoutDuration(Duration.ofSeconds(5))
-                        .build());
+        // Allow all requests through by default (lenient: not all tests invoke rate-limited methods)
+        lenient().when(distributedRateLimiter.tryAcquire()).thenReturn(true);
 
         executor = Executors.newVirtualThreadPerTaskExecutor();
 
@@ -82,7 +76,7 @@ class ResilientCacheServiceTest {
                 redissonClient,
                 circuitBreakerRegistry,
                 retryRegistry,
-                rateLimiterRegistry,
+                distributedRateLimiter,
                 executor);
     }
 
@@ -443,23 +437,4 @@ class ResilientCacheServiceTest {
         verifyNoInteractions(redissonClient);
     }
 
-    // ----------------------------------------------------------------
-    // shutdown()
-    // ----------------------------------------------------------------
-
-    @Test
-    void shutdown_stopsExecutor() {
-        // Create a fresh instance with its own executor to test shutdown
-        ExecutorService testExecutor = Executors.newSingleThreadExecutor();
-        ResilientCacheService svc = new ResilientCacheService(
-                redissonClient,
-                circuitBreakerRegistry,
-                retryRegistry,
-                rateLimiterRegistry,
-                testExecutor);
-
-        svc.shutdown();
-
-        assertThat(testExecutor.isShutdown()).isTrue();
-    }
 }

@@ -56,4 +56,19 @@ describe('useToast', () => {
 
     expect(result.current.toasts[0].variant).toBe('info')
   })
+
+  it('cleans up timers on unmount without errors', () => {
+    const { result, unmount } = renderHook(() => useToast())
+
+    act(() => {
+      result.current.addToast('Unmount test', 'info')
+    })
+
+    expect(result.current.toasts).toHaveLength(1)
+
+    unmount()
+
+    // Advancing timers after unmount should not cause errors
+    act(() => { vi.advanceTimersByTime(3000) })
+  })
 })

@@ -3,8 +3,6 @@ package com.example.cache.service;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.decorators.Decorators;
-import io.github.resilience4j.ratelimiter.RateLimiter;
-import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryRegistry;
 
@@ -23,8 +21,6 @@ import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
-
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.LongAdder;
 import java.util.function.Supplier;
@@ -44,7 +40,7 @@ import java.util.function.Supplier;
  * ## 回復力パターン
  * - **CircuitBreaker**: 連続的な障害時の呼び出し停止
  * - **Retry**: 一時的障害に対する自動再試行
- * - **RateLimiter**: システム負荷制限
+ * - **RateLimiter**: Redis バックエンド分散レートリミッター（{@link DistributedRateLimiterService}）
  *
  * ## パフォーマンス最適化
  * - Java 21のVirtual Threadsによる効率的な非同期処理
@@ -67,17 +63,19 @@ public class ResilientCacheService {
     // Resilience4jコンポーネント（回復力パターン実装）
     private final CircuitBreaker circuitBreaker;
     private final Retry retry;
-    private final RateLimiter rateLimiter;
+
+    // Redis バックエンドの分散レートリミッター
+    private final DistributedRateLimiterService distributedRateLimiter;
 
     public ResilientCacheService(RedissonClient redissonClient,
                                  CircuitBreakerRegistry circuitBreakerRegistry,
                                  RetryRegistry retryRegistry,
-                                 RateLimiterRegistry rateLimiterRegistry,
+                                 DistributedRateLimiterService distributedRateLimiter,
                                  ExecutorService virtualThreadExecutor) {
         this.redissonClient = redissonClient;
         this.circuitBreaker = circuitBreakerRegistry.circuitBreaker("cache-operations");
         this.retry = retryRegistry.retry("default");
-        this.rateLimiter = rateLimiterRegistry.rateLimiter("default");
+        this.distributedRateLimiter = distributedRateLimiter;
         this.virtualExecutor = virtualThreadExecutor;
     }
 
@@ -102,16 +100,22 @@ public class ResilientCacheService {
     public <T> Optional<T> get(String key, Class<T> type, Supplier<T> fallbackSupplier) {
         metrics.recordOperation("get");
 
+        // 分散レートリミッターでシステム負荷制限（Redis バックエンド）
+        if (!distributedRateLimiter.tryAcquire()) {
+            logger.warn("分散レートリミッターにより拒否: key={}", key);
+            metrics.recordError();
+            return Optional.empty();
+        }
 
         // L1: Redis操作を回復力パターンでラップ
         Supplier<Optional<T>> redisOperation = () -> getFromRedis(key, type);
 
         // Decoratorsパターンで複数の回復力パターンを組み合わせ
-        // 実行順序: RateLimiter → Retry → CircuitBreaker → 実際のRedis操作
+        // 実行順序: Retry → CircuitBreaker → 実際のRedis操作
+        // （レートリミットは上で事前チェック済み）
         Optional<T> result = Decorators.ofSupplier(redisOperation)
                 .withCircuitBreaker(circuitBreaker) // サーキットブレーカーで障害時の呼び出し停止
                 .withRetry(retry) // 一時的障害に対する再試行
-                .withRateLimiter(rateLimiter) // システム負荷制限
                 .withFallback(Arrays.asList( // 特定例外に対するフォールバック
                         RedisConnectionException.class,
                         RedisTimeoutException.class,
@@ -163,13 +167,19 @@ public class ResilientCacheService {
         metrics.recordOperation("set");
 
         return CompletableFuture.supplyAsync(() -> {
+            // 分散レートリミッターでシステム負荷制限（Redis バックエンド）
+            if (!distributedRateLimiter.tryAcquire()) {
+                logger.warn("分散レートリミッターにより書き込み拒否: key={}", key);
+                metrics.recordError();
+                return false;
+            }
+
             Supplier<Boolean> operation = () -> setInRedis(key, value, ttl);
 
             // Redis書き込み操作を回復力パターンで保護
             boolean redisResult = Decorators.ofSupplier(operation)
                     .withCircuitBreaker(circuitBreaker)
                     .withRetry(retry)
-                    .withRateLimiter(rateLimiter)
                     .withFallback(Arrays.asList(
                             RedisConnectionException.class,
                             RedisTimeoutException.class,
@@ -286,9 +296,15 @@ public class ResilientCacheService {
 
         // NOTE: searchKeys には意図的に Retry を適用していない。
         // SCAN 系のキー検索は冪等だが、大量キー環境でのリトライはシステム負荷を増大させるため除外している。
+        // 分散レートリミッターでシステム負荷制限（検索は重い操作）
+        if (!distributedRateLimiter.tryAcquire()) {
+            logger.warn("分散レートリミッターによりキー検索拒否: pattern={}", pattern);
+            metrics.recordError();
+            return Collections.emptySet();
+        }
+
         Set<String> results = Decorators.ofSupplier(() -> searchKeysInRedis(pattern, limit))
                 .withCircuitBreaker(circuitBreaker)
-                .withRateLimiter(rateLimiter) // 検索は重い操作なのでRate Limitを適用
                 .withFallback(Arrays.asList(Exception.class), throwable -> {
                     logger.warn("キー検索失敗: pattern={}", pattern, throwable);
                     metrics.recordError();
@@ -553,29 +569,6 @@ public class ResilientCacheService {
      */
     public boolean isSimulateError() {
         return simulateError;
-    }
-
-    /**
-     * リソースクリーンアップ
-     *
-     * アプリケーション終了時に呼び出して、
-     * 適切なリソース解放を行います。
-     */
-    public void shutdown() {
-        logger.info("ResilientCacheService シャットダウン開始");
-
-        virtualExecutor.shutdown();
-        try {
-            if (!virtualExecutor.awaitTermination(5, TimeUnit.SECONDS)) {
-                logger.warn("VirtualExecutor がタイムアウト内に終了しませんでした");
-                virtualExecutor.shutdownNow();
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            virtualExecutor.shutdownNow();
-        }
-
-        logger.info("ResilientCacheService シャットダウン完了");
     }
 
     /**
