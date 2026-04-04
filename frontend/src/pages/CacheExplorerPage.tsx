@@ -35,8 +35,10 @@ export function CacheExplorerPage() {
       for (let i = 0; i < searchRes.keys.length; i += 50) {
         chunks.push(searchRes.keys.slice(i, i + 50));
       }
-      for (const chunk of chunks) {
-        const res = await cacheApi.batchGet(chunk);
+      const chunkResults = await Promise.all(
+        chunks.map(chunk => cacheApi.batchGet(chunk))
+      );
+      for (const res of chunkResults) {
         Object.assign(allResults, res.results);
       }
       setResults(allResults);
