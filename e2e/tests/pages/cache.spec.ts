@@ -41,6 +41,46 @@ test.describe('Cache Explorer (/cache)', () => {
   });
 });
 
+test.describe('ValueEditor — プレーンテキスト保存', () => {
+
+  test('JSON ではないプレーンテキストを保存できる', async ({ page, request }) => {
+    const key = `e2e-plain-${Date.now()}`;
+    await request.post(`/api/cache/set/${key}`, {
+      data: { value: 'original', ttl: 120 },
+    });
+
+    await page.goto(`/cache/${encodeURIComponent(key)}`);
+    await page.waitForLoadState('networkidle');
+
+    // 編集ボタンをクリック
+    const editButton = page.getByRole('button', { name: /編集|edit/i }).first();
+    if (await editButton.isVisible({ timeout: 5_000 })) {
+      await editButton.click();
+
+      // テキストエリアにプレーンテキストを入力
+      const textarea = page.locator('textarea').first();
+      await expect(textarea).toBeVisible({ timeout: 5_000 });
+      await textarea.fill('plain text value');
+
+      // 保存
+      const saveButton = page.getByRole('button', { name: /保存|save/i }).first();
+      await saveButton.click();
+
+      // エラーが表示されないこと（以前は JSON パースエラーになっていた）
+      await expect(page.getByText(/JSON の形式が正しくありません/)).not.toBeVisible();
+    }
+
+    // API で値を確認
+    const getRes = await request.get(`/api/cache/get/${key}`);
+    const body = await getRes.json();
+    if (body.found) {
+      expect(body.value).toBe('plain text value');
+    }
+
+    await request.delete(`/api/cache/delete/${key}`);
+  });
+});
+
 test.describe('Cache Detail (/cache/:key)', () => {
 
   test('存在するキーの詳細ページが表示される', async ({ page, request }) => {

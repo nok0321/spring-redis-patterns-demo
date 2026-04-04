@@ -41,6 +41,39 @@ test.describe('Redis CLI (/cli)', () => {
     await request.delete(`/api/cache/delete/${key}`);
   });
 
+  test('KEYS コマンドは拒否される（O(N) ブロッキング防止）', async ({ page }) => {
+    const input = page.locator('input[placeholder*="コマンド"], input[placeholder*="command"], input[type="text"]').first();
+    await expect(input).toBeVisible({ timeout: 10_000 });
+    await input.fill('KEYS *');
+
+    const execButton = page.getByRole('button', { name: /実行|run|exec/i }).first();
+    if (await execButton.isVisible()) {
+      await execButton.click();
+    } else {
+      await input.press('Enter');
+    }
+
+    await expect(page.getByText(/not allowed|許可されていません|エラー/i)).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('SCAN コマンドは KEYS の代替として動作する', async ({ page }) => {
+    const input = page.locator('input[placeholder*="コマンド"], input[placeholder*="command"], input[type="text"]').first();
+    await expect(input).toBeVisible({ timeout: 10_000 });
+    await input.fill('SCAN 0');
+
+    const execButton = page.getByRole('button', { name: /実行|run|exec/i }).first();
+    if (await execButton.isVisible()) {
+      await execButton.click();
+    } else {
+      await input.press('Enter');
+    }
+
+    // SCAN の結果が表示される（エラーではない）
+    await expect(page.getByText(/not allowed|許可されていません/i)).not.toBeVisible();
+    // redis> SCAN 0 が表示される
+    await expect(page.getByText('redis> SCAN 0')).toBeVisible({ timeout: 10_000 });
+  });
+
   test('ホワイトリスト外コマンドは拒否される', async ({ page }) => {
     const input = page.locator('input[placeholder*="コマンド"], input[placeholder*="command"], input[type="text"]').first();
     await expect(input).toBeVisible({ timeout: 10_000 });
