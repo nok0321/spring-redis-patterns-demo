@@ -32,7 +32,7 @@ test.describe('Cache Explorer (/cache)', () => {
     const searchInput = page.locator('input[placeholder*="検索"], input[placeholder*="search"], input[type="search"]').first();
     if (await searchInput.isVisible()) {
       await searchInput.fill(key);
-      await page.waitForTimeout(500);
+      await page.waitForResponse(resp => resp.url().includes('/api/cache/search') && resp.ok());
     }
     await expect(page.getByText(key).first()).toBeVisible({ timeout: 10_000 });
 

@@ -783,12 +783,15 @@ class DistributedLockServiceTest {
         }
 
         @Test
-        void futureIsNotNull() {
+        void futureIsNotNull() throws Exception {
             when(redissonClient.getLock("akey")).thenReturn(lock);
-            // No further stubbing needed; just verify non-null return
+            when(lock.tryLock(10, 30, TimeUnit.SECONDS)).thenReturn(false);
+
             CompletableFuture<Optional<String>> future =
                     service.executeWithLockAsync("akey", () -> "val");
             assertThat(future).isNotNull();
+            // Wait for async completion to avoid UnnecessaryStubbingException race
+            future.get(5, TimeUnit.SECONDS);
         }
     }
 

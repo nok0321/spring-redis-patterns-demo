@@ -75,7 +75,7 @@ services:
       - loki
 
   jaeger:
-    image: jaegertracing/all-in-one:2.6
+    image: jaegertracing/jaeger:2.6.0
     restart: unless-stopped
     environment:
       - COLLECTOR_OTLP_ENABLED=true
