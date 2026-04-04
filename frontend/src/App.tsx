@@ -35,7 +35,7 @@ export default function App() {
           <Route path="/pubsub"          element={<PubSubPage />} />
           <Route path="/saga"            element={<SagaTracerPage />} />
           <Route path="/cli"             element={<RedisCliPage />} />
-          <Route path="*"               element={<div style={{padding:'2rem',textAlign:'center'}}><h2>404 - ページが見つかりません</h2></div>} />
+          <Route path="*"               element={<div className="p-8 text-center"><h2 className="text-xl font-bold mb-4">404 - ページが見つかりません</h2><a href="/" className="text-blue-400 hover:text-blue-300 underline">ホームに戻る</a></div>} />
         </Routes>
         </ErrorBoundary>
       </AppShell>

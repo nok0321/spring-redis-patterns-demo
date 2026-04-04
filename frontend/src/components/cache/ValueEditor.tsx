@@ -19,8 +19,8 @@ export function ValueEditor({ initialValue, onSave, onCancel }: ValueEditorProps
     try {
       parsed = JSON.parse(raw);
     } catch {
-      setError('JSON の形式が正しくありません');
-      return;
+      // JSON としてパースできない場合はプレーン文字列として保存
+      parsed = raw;
     }
     setError(null);
     setIsSaving(true);

@@ -78,7 +78,7 @@ describe('ValueEditor', () => {
     })
   })
 
-  it('無効なJSONの場合はエラーメッセージが表示されonSaveは呼ばれない', async () => {
+  it('無効なJSONの場合はプレーン文字列としてonSaveが呼ばれる', async () => {
     const user = userEvent.setup()
 
     render(
@@ -91,8 +91,7 @@ describe('ValueEditor', () => {
 
     await user.click(screen.getByRole('button', { name: '保存' }))
 
-    expect(screen.getByText('JSON の形式が正しくありません')).toBeInTheDocument()
-    expect(mockOnSave).not.toHaveBeenCalled()
+    expect(mockOnSave).toHaveBeenCalledWith('not valid json')
   })
 
   it('キャンセルボタンをクリックするとonCancelが呼ばれる', async () => {
@@ -158,22 +157,25 @@ describe('ValueEditor', () => {
     })
   })
 
-  it('テキストを編集するとエラーメッセージがクリアされる', async () => {
+  it('onSave失敗時のエラーメッセージがテキスト編集でクリアされる', async () => {
     const user = userEvent.setup()
+    mockOnSave.mockRejectedValueOnce(new Error('保存に失敗しました'))
 
     render(
       <ValueEditor
-        initialValue="bad json"
+        initialValue='"valid"'
         onSave={mockOnSave}
         onCancel={mockOnCancel}
       />
     )
 
     await user.click(screen.getByRole('button', { name: '保存' }))
-    expect(screen.getByText('JSON の形式が正しくありません')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('保存に失敗しました')).toBeInTheDocument()
+    })
 
     const textarea = screen.getByRole('textbox')
     await user.type(textarea, ' ')
-    expect(screen.queryByText('JSON の形式が正しくありません')).not.toBeInTheDocument()
+    expect(screen.queryByText('保存に失敗しました')).not.toBeInTheDocument()
   })
 })

@@ -37,7 +37,11 @@ export async function apiFetch<T>(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = {};
+  const method = fetchOptions.method?.toUpperCase() ?? 'GET';
+  if (method !== 'GET' && method !== 'DELETE') {
+    headers['Content-Type'] = 'application/json';
+  }
   const apiKey = getApiKey();
   if (apiKey) {
     headers['X-API-Key'] = apiKey;
