@@ -18,7 +18,7 @@ processors:
 exporters:
   debug:
     verbosity: basic
-  otlp_grpc/jaeger:
+  otlp/jaeger:
     endpoint: jaeger:4317
     tls:
       insecure: true
@@ -34,7 +34,7 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [debug, otlp_grpc/jaeger]
+      exporters: [debug, otlp/jaeger]
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, batch]
