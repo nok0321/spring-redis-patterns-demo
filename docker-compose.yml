@@ -16,6 +16,8 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-}
     ports:
       - "127.0.0.1:6379:6379"
+    mem_limit: 256m
+    cpus: '0.5'
     volumes:
       - redis-data:/data
     healthcheck:
@@ -32,7 +34,9 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
+    mem_limit: 768m
+    cpus: '1.0'
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -63,6 +67,8 @@ services:
     restart: unless-stopped
     ports:
       - "80:8080"
+    mem_limit: 128m
+    cpus: '0.5'
     depends_on:
       backend:
         condition: service_healthy
@@ -76,8 +82,10 @@ services:
       - ./docker/otel-collector-config.yaml:/etc/otel/config.yaml
     command: ["--config=/etc/otel/config.yaml"]
     ports:
-      - "4317:4317"
-      - "4318:4318"
+      - "127.0.0.1:4317:4317"
+      - "127.0.0.1:4318:4318"
+    mem_limit: 256m
+    cpus: '0.5'
     depends_on:
       - jaeger
       - loki
@@ -91,7 +99,9 @@ services:
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
-      - "16686:16686"
+      - "127.0.0.1:16686:16686"
+    mem_limit: 512m
+    cpus: '0.5'
     networks:
       - monitoring
 
@@ -100,7 +110,9 @@ services:
     restart: unless-stopped
     command: ["-config.file=/etc/loki/local-config.yaml"]
     ports:
-      - "3100:3100"
+      - "127.0.0.1:3100:3100"
+    mem_limit: 256m
+    cpus: '0.5'
     volumes:
       - loki-data:/loki
     networks:
@@ -116,7 +128,9 @@ services:
       - ./docker/alert-rules.yml:/etc/prometheus/alert-rules.yml
       - prometheus-data:/prometheus
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
+    mem_limit: 256m
+    cpus: '0.5'
     depends_on:
       backend:
         condition: service_healthy
@@ -136,7 +150,9 @@ services:
       - ./docker/grafana/dashboards:/var/lib/grafana/dashboards
       - grafana-data:/var/lib/grafana
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
+    mem_limit: 256m
+    cpus: '0.5'
     depends_on:
       - prometheus
       - loki

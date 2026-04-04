@@ -2,6 +2,14 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
 
+# NOTE: Alertmanager is not configured in this demo project.
+# Alert rules in alert-rules.yml are evaluated but notifications are not sent.
+# To enable alerting, add an Alertmanager service and uncomment:
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets: ['alertmanager:9093']
+
 rule_files:
   - '/etc/prometheus/alert-rules.yml'
 
