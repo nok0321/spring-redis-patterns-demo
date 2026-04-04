@@ -45,7 +45,7 @@ class CacheControllerTest {
 
     @Test
     void getCache_keyFound_returns200() throws Exception {
-        when(cacheService.get(eq("mykey"), any(), isNull()))
+        when(cacheService.get(eq("mykey"), isNull()))
                 .thenReturn(Optional.of("hello"));
 
         mockMvc.perform(get("/api/cache/get/mykey"))
@@ -57,7 +57,7 @@ class CacheControllerTest {
 
     @Test
     void getCache_keyNotFound_returnsFoundFalse() throws Exception {
-        when(cacheService.get(eq("missing"), any(), isNull()))
+        when(cacheService.get(eq("missing"), isNull()))
                 .thenReturn(Optional.empty());
 
         mockMvc.perform(get("/api/cache/get/missing"))
@@ -67,7 +67,7 @@ class CacheControllerTest {
 
     @Test
     void getCache_withTypeParam_usesCorrectClass() throws Exception {
-        when(cacheService.get(eq("counter"), any(), isNull()))
+        when(cacheService.get(eq("counter"), isNull()))
                 .thenReturn(Optional.of(42));
 
         mockMvc.perform(get("/api/cache/get/counter?type=integer"))

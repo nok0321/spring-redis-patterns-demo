@@ -44,7 +44,7 @@ class LockDemoOrchestratorTest {
                     DistributedLockService.FencedOperation<Object> op = inv.getArgument(1);
                     return Optional.of(op.execute(1L));
                 });
-        when(cacheService.get(eq("mykey"), eq(Object.class), isNull()))
+        when(cacheService.get(eq("mykey"), isNull()))
                 .thenReturn(Optional.of("hello"));
 
         Optional<Map<String, Object>> result = orchestrator.executeFencedOperation(
@@ -64,7 +64,7 @@ class LockDemoOrchestratorTest {
                     DistributedLockService.FencedOperation<Object> op = inv.getArgument(1);
                     return Optional.of(op.execute(2L));
                 });
-        when(cacheService.get(eq("mykey"), eq(Object.class), isNull()))
+        when(cacheService.get(eq("mykey"), isNull()))
                 .thenReturn(Optional.empty());
 
         Optional<Map<String, Object>> result = orchestrator.executeFencedOperation(
@@ -124,7 +124,7 @@ class LockDemoOrchestratorTest {
                     DistributedLockService.FencedOperation<Object> op = inv.getArgument(1);
                     return Optional.of(op.execute(5L));
                 });
-        when(cacheService.get(eq("ctr"), eq(Integer.class), any()))
+        when(cacheService.get(eq("ctr"), any()))
                 .thenReturn(Optional.of(10));
         when(cacheService.setAsync(eq("ctr"), eq(15), any()))
                 .thenReturn(CompletableFuture.completedFuture(true));
@@ -146,7 +146,7 @@ class LockDemoOrchestratorTest {
                     DistributedLockService.FencedOperation<Object> op = inv.getArgument(1);
                     return Optional.of(op.execute(6L));
                 });
-        when(cacheService.get(eq("k1"), eq(Object.class), isNull()))
+        when(cacheService.get(eq("k1"), isNull()))
                 .thenReturn(Optional.of("old"));
         when(cacheService.setAsync(eq("k1"), eq("new"), any()))
                 .thenReturn(CompletableFuture.completedFuture(true));
@@ -171,7 +171,7 @@ class LockDemoOrchestratorTest {
                     DistributedLockService.FencedOperation<Object> op = inv.getArgument(1);
                     return Optional.of(op.execute(6L));
                 });
-        when(cacheService.get(eq("k1"), eq(Object.class), isNull()))
+        when(cacheService.get(eq("k1"), isNull()))
                 .thenReturn(Optional.of("different"));
 
         Map<String, Object> data = new HashMap<>();
@@ -238,7 +238,7 @@ class LockDemoOrchestratorTest {
                     Supplier<Object> op = inv.getArgument(1);
                     return Optional.of(op.get());
                 });
-        when(cacheService.get(eq("rk"), eq(Object.class), isNull()))
+        when(cacheService.get(eq("rk"), isNull()))
                 .thenReturn(Optional.of("rval"));
 
         Optional<Map<String, Object>> result = orchestrator.executeLockOperation(
@@ -257,7 +257,7 @@ class LockDemoOrchestratorTest {
                     Supplier<Object> op = inv.getArgument(1);
                     return Optional.of(op.get());
                 });
-        when(cacheService.get(eq("rk"), eq(Object.class), isNull()))
+        when(cacheService.get(eq("rk"), isNull()))
                 .thenReturn(Optional.empty());
 
         Optional<Map<String, Object>> result = orchestrator.executeLockOperation(
@@ -296,7 +296,7 @@ class LockDemoOrchestratorTest {
                     Supplier<Object> op = inv.getArgument(1);
                     return Optional.of(op.get());
                 });
-        when(cacheService.get(eq("ctr"), eq(Integer.class), any()))
+        when(cacheService.get(eq("ctr"), any()))
                 .thenReturn(Optional.of(7));
         when(cacheService.setAsync(eq("ctr"), eq(10), any()))
                 .thenReturn(CompletableFuture.completedFuture(true));

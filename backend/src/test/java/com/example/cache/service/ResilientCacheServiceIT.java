@@ -52,14 +52,14 @@ class ResilientCacheServiceIT {
     @Test
     void setAsync_and_get_roundTrip_string() throws Exception {
         cacheService.setAsync("test:str", "hello", Duration.ofMinutes(5)).get();
-        Optional<String> result = cacheService.get("test:str", String.class, null);
+        Optional<String> result = cacheService.get("test:str", null);
         assertThat(result).isPresent().contains("hello");
     }
 
     @Test
     void setAsync_and_get_roundTrip_integer() throws Exception {
         cacheService.setAsync("test:int", 42, Duration.ofMinutes(5)).get();
-        Optional<Object> result = cacheService.get("test:int", Object.class, null);
+        Optional<Object> result = cacheService.get("test:int", null);
         assertThat(result).isPresent();
     }
 
@@ -69,7 +69,7 @@ class ResilientCacheServiceIT {
         boolean deleted = cacheService.delete("test:del");
         assertThat(deleted).isTrue();
 
-        Optional<String> after = cacheService.get("test:del", String.class, null);
+        Optional<String> after = cacheService.get("test:del", null);
         assertThat(after).isEmpty();
     }
 
@@ -101,7 +101,7 @@ class ResilientCacheServiceIT {
     void getMetrics_recordsOperations() throws Exception {
         cacheService.getMetrics().reset();
         cacheService.setAsync("metrics:test", "v", Duration.ofMinutes(1)).get();
-        cacheService.get("metrics:test", String.class, null);
+        cacheService.get("metrics:test", null);
 
         Map<String, Long> metricsMap = cacheService.getMetrics().toMap();
         assertThat(metricsMap.get("operations")).isGreaterThanOrEqualTo(2L);
@@ -136,7 +136,7 @@ class ResilientCacheServiceIT {
         cacheService.setSimulateError(true);
         for (int i = 0; i < calls; i++) {
             try {
-                cacheService.get("cb-trip:" + i, String.class, null);
+                cacheService.get("cb-trip:" + i, null);
             } catch (RuntimeException ignored) {
                 // CB に失敗を記録させるため、例外を握りつぶす
             }
@@ -166,7 +166,7 @@ class ResilientCacheServiceIT {
 
         // OPEN 状態では CallNotPermittedException → fallback が返る
         cacheService.setSimulateError(false);
-        Optional<String> result = cacheService.get("cb-fallback:key", String.class,
+        Optional<String> result = cacheService.get("cb-fallback:key",
                 () -> "fallback-value");
         assertThat(result).isPresent().contains("fallback-value");
     }
@@ -190,7 +190,7 @@ class ResilientCacheServiceIT {
 
         // HALF_OPEN で permitted-number-of-calls-in-half-open-state=3 回成功させる
         for (int i = 0; i < 3; i++) {
-            Optional<String> probe = cacheService.get("cb-recover:key", String.class, null);
+            Optional<String> probe = cacheService.get("cb-recover:key", null);
             assertThat(probe).isPresent().contains("ok");
         }
 

@@ -294,13 +294,13 @@ public class LockController {
         String toKey = (String) body.get("toKey");
         Object amountObj = body.get("amount");
 
-        if (fromKey == null || toKey == null || !(amountObj instanceof Number)) {
+        if (fromKey == null || toKey == null || !(amountObj instanceof Number amountNum)) {
             return ResponseEntity.badRequest().body(Map.of(
                     "error", "fromKey, toKey, and positive amount are required",
                     "timestamp", System.currentTimeMillis()));
         }
 
-        double amount = ((Number) amountObj).doubleValue();
+        double amount = amountNum.doubleValue();
         if (amount <= 0) {
             return ResponseEntity.badRequest().body(Map.of(
                     "error", "fromKey, toKey, and positive amount are required",
