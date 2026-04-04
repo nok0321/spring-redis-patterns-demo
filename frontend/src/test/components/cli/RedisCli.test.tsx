@@ -59,7 +59,7 @@ describe('RedisCli', () => {
   it('入力したコマンドがターミナルに「redis> コマンド」形式で表示される', async () => {
     const user = userEvent.setup()
     mockExecute.mockResolvedValue({
-      command: 'KEYS star',
+      command: 'SCAN 0',
       result: 'key1',
       executionMs: 3,
       timestamp: Date.now(),
@@ -68,11 +68,11 @@ describe('RedisCli', () => {
     render(<RedisCli />)
 
     const input = screen.getByPlaceholderText(/コマンドを入力/)
-    await user.type(input, 'KEYS star')
+    await user.type(input, 'SCAN 0')
     await user.keyboard('{Enter}')
 
     await waitFor(() => {
-      expect(screen.getByText('redis> KEYS star')).toBeInTheDocument()
+      expect(screen.getByText('redis> SCAN 0')).toBeInTheDocument()
     })
   })
 

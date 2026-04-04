@@ -53,11 +53,6 @@ describe('RedisCliPage', () => {
     expect(screen.getByText('SET <key> <value>')).toBeInTheDocument()
   })
 
-  it('shows KEYS <pattern> command in the reference list', () => {
-    renderPage()
-    expect(screen.getByText('KEYS <pattern>')).toBeInTheDocument()
-  })
-
   it('shows INFO command in the reference list', () => {
     renderPage()
     expect(screen.getByText('INFO')).toBeInTheDocument()
@@ -73,15 +68,11 @@ describe('RedisCliPage', () => {
     expect(screen.getByText('SLOWLOG GET')).toBeInTheDocument()
   })
 
-  it('renders all 16 command entries', () => {
+  it('renders all 15 command entries', () => {
     renderPage()
-    // Each command has a description alongside it; count the description elements.
-    // Spot-check: all 16 commands produce 16 .font-mono elements in the reference list.
-    // We can verify by counting green mono spans (one per command).
     const commandTexts = [
       'GET <key>',
       'SET <key> <value>',
-      'KEYS <pattern>',
       'SCAN 0',
       'TTL <key>',
       'PTTL <key>',

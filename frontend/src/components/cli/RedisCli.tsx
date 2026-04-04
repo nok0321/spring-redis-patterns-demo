@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { cliApi } from '../../api/cli';
 
 const ALLOWED_COMMANDS = [
-  'GET', 'SET', 'KEYS', 'SCAN', 'TTL', 'PTTL', 'TYPE',
+  'GET', 'SET', 'SCAN', 'TTL', 'PTTL', 'TYPE',
   'INFO', 'LLEN', 'HGETALL', 'SMEMBERS', 'ZRANGE', 'ZCARD',
   'STRLEN', 'MEMORY USAGE', 'SLOWLOG GET',
 ];
