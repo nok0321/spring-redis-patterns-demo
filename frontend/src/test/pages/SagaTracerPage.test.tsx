@@ -32,24 +32,24 @@ const mockRunSagaFail = vi.mocked(transactionApi.runSagaFail)
 
 const mockSuccessResult = {
   steps: [
-    { name: 'OrderCreated', status: 'SUCCESS' as const, durationMs: 12 },
-    { name: 'PaymentProcessed', status: 'SUCCESS' as const, durationMs: 34 },
-    { name: 'InventoryReserved', status: 'SUCCESS' as const, durationMs: 8 },
+    { name: 'OrderCreated', status: 'SUCCESS' as const, durationMs: 12, detail: '' },
+    { name: 'PaymentProcessed', status: 'SUCCESS' as const, durationMs: 34, detail: '' },
+    { name: 'InventoryReserved', status: 'SUCCESS' as const, durationMs: 8, detail: '' },
   ],
   overallStatus: 'SUCCESS' as const,
-  timestamp: '2026-04-04T00:00:00Z',
+  timestamp: Date.parse('2026-04-04T00:00:00Z'),
 }
 
 const mockFailResult = {
   steps: [
-    { name: 'OrderCreated', status: 'SUCCESS' as const, durationMs: 12 },
-    { name: 'PaymentProcessed', status: 'FAILED' as const, durationMs: 5 },
+    { name: 'OrderCreated', status: 'SUCCESS' as const, durationMs: 12, detail: '' },
+    { name: 'PaymentProcessed', status: 'FAILED' as const, durationMs: 5, detail: 'error' },
   ],
   compensationSteps: [
-    { name: 'OrderCancelled', status: 'COMPENSATED' as const, durationMs: 9 },
+    { name: 'OrderCancelled', status: 'COMPENSATED' as const, durationMs: 9, detail: '' },
   ],
   overallStatus: 'COMPENSATED' as const,
-  timestamp: '2026-04-04T00:00:00Z',
+  timestamp: Date.parse('2026-04-04T00:00:00Z'),
 }
 
 function renderPage() {

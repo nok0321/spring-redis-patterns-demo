@@ -27,6 +27,8 @@ const defaultSearchResult = {
 }
 
 const defaultBatchGetResult = {
+  requested: 3,
+  found: 3,
   results: {
     'cache:user:1': 'Alice',
     'cache:user:2': 'Bob',
@@ -432,6 +434,8 @@ describe('RedisVisualizerPage', () => {
         keys: ['user:profile'],
       })
       mockBatchGet.mockResolvedValue({
+        requested: 1,
+        found: 1,
         results: {
           'user:profile': { name: 'Alice', age: 30, role: 'admin' },
         },
@@ -457,6 +461,8 @@ describe('RedisVisualizerPage', () => {
         keys: ['queue:tasks'],
       })
       mockBatchGet.mockResolvedValue({
+        requested: 1,
+        found: 1,
         results: {
           'queue:tasks': ['task1', 'task2', 'task3'],
         },
@@ -478,6 +484,8 @@ describe('RedisVisualizerPage', () => {
         keys: ['queue:tasks'],
       })
       mockBatchGet.mockResolvedValue({
+        requested: 1,
+        found: 1,
         results: {
           'queue:tasks': ['task1', 'task2'],
         },
@@ -501,6 +509,8 @@ describe('RedisVisualizerPage', () => {
         keys: ['leaderboard'],
       })
       mockBatchGet.mockResolvedValue({
+        requested: 1,
+        found: 1,
         results: {
           'leaderboard': [
             { m: 'player1', s: 100 },
@@ -527,6 +537,8 @@ describe('RedisVisualizerPage', () => {
         keys: ['events:stream'],
       })
       mockBatchGet.mockResolvedValue({
+        requested: 1,
+        found: 1,
         results: {
           'events:stream': [
             { id: '1700000000-0', fields: { event: 'click' } },
@@ -558,6 +570,8 @@ describe('RedisVisualizerPage', () => {
       // we need to test the TTLBar sub-component behavior directly via StringValue values.
       // We only verify that the page renders without error for coverage.
       mockBatchGet.mockResolvedValue({
+        requested: 1,
+        found: 1,
         results: { 'ttl:key': `value-with-ttl-${ttl}` },
       })
       renderPage()
@@ -581,6 +595,8 @@ describe('RedisVisualizerPage', () => {
         keys: ['str:key', 'hash:key'],
       })
       mockBatchGet.mockResolvedValue({
+        requested: 1,
+        found: 1,
         results: {
           'str:key': 'hello',
           'hash:key': { field1: 'value1' },
@@ -611,6 +627,8 @@ describe('RedisVisualizerPage', () => {
         keys: ['hash:key', 'str:key'],
       })
       mockBatchGet.mockResolvedValue({
+        requested: 1,
+        found: 1,
         results: {
           'hash:key': { field1: 'value1' },
           'str:key': 'hello',
@@ -639,6 +657,8 @@ describe('RedisVisualizerPage', () => {
         keys: ['str:key', 'hash:key'],
       })
       mockBatchGet.mockResolvedValue({
+        requested: 1,
+        found: 1,
         results: {
           'str:key': 'hello',
           'hash:key': { field1: 'value1' },
@@ -679,6 +699,8 @@ describe('RedisVisualizerPage', () => {
         keys: ['list:key'],
       })
       mockBatchGet.mockResolvedValue({
+        requested: 1,
+        found: 1,
         results: {
           'list:key': ['a', 'b', 'c'],
         },
@@ -700,6 +722,8 @@ describe('RedisVisualizerPage', () => {
         keys: ['hash:key'],
       })
       mockBatchGet.mockResolvedValue({
+        requested: 1,
+        found: 1,
         results: {
           'hash:key': { name: 'Alice', role: 'admin' },
         },
@@ -721,6 +745,8 @@ describe('RedisVisualizerPage', () => {
         keys: ['str:key'],
       })
       mockBatchGet.mockResolvedValue({
+        requested: 1,
+        found: 1,
         results: { 'str:key': 'hello' },
       })
       renderPage()
@@ -745,8 +771,8 @@ describe('RedisVisualizerPage', () => {
       mockSearchKeys.mockResolvedValue({ pattern: '*', limit: 200, count: 60, keys })
       // First chunk (0..49), second chunk (50..59)
       mockBatchGet
-        .mockResolvedValueOnce({ results: Object.fromEntries(keys.slice(0, 50).map(k => [k, results[k]])) })
-        .mockResolvedValueOnce({ results: Object.fromEntries(keys.slice(50).map(k => [k, results[k]])) })
+        .mockResolvedValueOnce({ requested: 50, found: 50, results: Object.fromEntries(keys.slice(0, 50).map(k => [k, results[k]])) })
+        .mockResolvedValueOnce({ requested: 10, found: 10, results: Object.fromEntries(keys.slice(50).map(k => [k, results[k]])) })
 
       renderPage()
       await waitFor(() => {

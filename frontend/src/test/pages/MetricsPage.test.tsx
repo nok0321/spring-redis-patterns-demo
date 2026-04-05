@@ -190,7 +190,7 @@ describe('MetricsPage', () => {
       vi.spyOn(document, 'createElement').mockImplementation((tag: string) => {
         const el = origCreateElement(tag)
         if (tag === 'a') {
-          vi.spyOn(el as HTMLElement, 'click').mockImplementation(anchorClickSpy)
+          vi.spyOn(el as HTMLElement, 'click').mockImplementation(anchorClickSpy as () => void)
         }
         return el
       })

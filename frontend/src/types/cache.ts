@@ -1,7 +1,7 @@
 export interface CacheGetResponse {
   key: string;
   found: boolean;
-  value: unknown | null;
+  value: unknown;
 }
 
 export interface CacheSetRequest {
@@ -24,6 +24,25 @@ export interface CacheBatchSetEntry {
 export interface CacheDeleteResponse {
   key: string;
   deleted: boolean;
+}
+
+export interface CacheSetResponse {
+  key: string;
+  success: boolean;
+  ttl: string;
+}
+
+export interface CacheBatchSetResponse {
+  total: number;
+  successful: number;
+  failed: number;
+}
+
+export interface CacheSearchResponse {
+  pattern: string;
+  limit: number;
+  count: number;
+  keys: string[];
 }
 
 export interface CacheMetrics {

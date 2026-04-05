@@ -150,7 +150,7 @@ describe('CacheExplorerPage', () => {
       },
     })
     mockDelete.mockResolvedValue({ key: 'demo:greeting', deleted: true })
-    mockSet.mockResolvedValue({ key: 'new:key', success: true })
+    mockSet.mockResolvedValue({ key: 'new:key', success: true, ttl: 'PT1H' })
     mockWarmup.mockResolvedValue({ status: 'DONE', keys: 2 })
   })
 

@@ -3,12 +3,6 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { PubSubPage } from '../../pages/PubSubPage'
 
-// jsdom does not implement HTMLElement.scrollTo — mock it globally for this suite
-Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
-  writable: true,
-  value: vi.fn(),
-})
-
 // Mock pubsubApi
 vi.mock('../../api/pubsub', () => ({
   pubsubApi: {

@@ -191,7 +191,7 @@ export function RedisVisualizerPage() {
 
   useEffect(() => {
     loadKeys('*');
-  }, []);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);  // eslint-disable-line react-hooks/exhaustive-deps -- loadKeys depends on `selected` state; including it would re-fetch on every selection change
 
   const handleDelete = async (key: string) => {
     setIsDeleting(true);

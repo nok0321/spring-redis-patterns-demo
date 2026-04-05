@@ -40,7 +40,6 @@ export interface FencedLockResponse {
   acquired: boolean;
   fencingToken: number | null;
   timestamp: number;
-  [key: string]: unknown;
 }
 
 export interface LockExecuteResponse {

@@ -88,13 +88,19 @@ describe('usePolling', () => {
     expect(fetcher).toHaveBeenCalledTimes(2)
   })
 
-  it('clears interval on unmount', () => {
-    const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval')
+  it('clears timeout on unmount', async () => {
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
     const fetcher = vi.fn().mockResolvedValue({})
     const { unmount } = renderHook(() => usePolling({ fetcher, interval: 1000 }))
 
+    // Wait for the initial fetch to complete so setTimeout is scheduled
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
     unmount()
 
-    expect(clearIntervalSpy).toHaveBeenCalled()
+    expect(clearTimeoutSpy).toHaveBeenCalled()
   })
 })
