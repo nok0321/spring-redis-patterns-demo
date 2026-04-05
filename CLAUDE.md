@@ -1,5 +1,5 @@
 # redis-app_s
-Spring Boot 4.x / Java 21 / Gradle 8.14 / Redisson 4.2 / Resilience4j 2.3 | React 19 / TypeScript 5.9 / Vite 7.3 | Docker Compose
+Spring Boot 4.x / Java 21 / Gradle 9.4 / Redisson 4.2 / Resilience4j 2.4 | React 19 / TypeScript 5.9 / Vite 8.0 / Vitest 4.1 | Docker Compose
 
 ## Commands
 
@@ -29,11 +29,13 @@ Spring Boot 4.x / Java 21 / Gradle 8.14 / Redisson 4.2 / Resilience4j 2.3 | Reac
 ```
 Browser → Nginx(:80) → Spring Boot(:8080) → Redis(:6379)
                     ↑
-              OpenTelemetry → Jaeger(:16686)
+              OTel Collector → Jaeger(:16686)  トレース
+                            → Prometheus(:9090) メトリクス → Grafana(:3000)
+                            → Loki(:3100)       ログ     ↗
 ```
 
 - `backend/src/main/java/com/example/cache/`
-  - `config/`      — Redis / Resilience4j / Web 設定
+  - `config/`      — Redis / Resilience4j / Security / Web 設定
   - `controller/`  — REST エンドポイント（Cache / Lock / PubSub / RateLimiter / Cli / Health）
   - `service/`     — ビジネスロジック（ResilientCache / DistributedLock / PubSub 等）
   - `util/`        — TypeResolver
@@ -49,7 +51,9 @@ Browser → Nginx(:80) → Spring Boot(:8080) → Redis(:6379)
 ### バックエンド
 - Java 21 機能を積極活用（Record, Pattern Matching, Virtual Threads）
 - Redisson API を通じた Redis 操作（直接 Lettuce / Jedis 禁止）
-- Resilience4j アノテーション（`@CircuitBreaker`, `@Retry`）をサービス層に配置
+- Redis 接続設定は `application.yml` + 環境変数経由（`redisson.yml` は廃止済み）
+- Resilience4j Decorators パターンをサービス層に適用（実行順: Retry → CB → Bulkhead → Redis）
+- `SecurityConfig`: `.anyRequest().denyAll()` — 未定義パスはデフォルト拒否
 - `@WebMvcTest` でコントローラ、TestContainers で統合テスト（`*IT.java`）
 
 ### フロントエンド
@@ -59,7 +63,7 @@ Browser → Nginx(:80) → Spring Boot(:8080) → Redis(:6379)
 
 ## Testing Rules
 - バックエンドカバレッジ閾値：ライン 90% / ファンクション 90% / ブランチ 85%
-- フロントエンドカバレッジ閾値：同上（vitest.config.ts 参照）
+- フロントエンドカバレッジ閾値：同上（vitest.config.ts 参照）、`tsconfig.test.json` で src/test も strict 型チェック対象
 - 修正前に既存テストを実行してベースライン確認
 - 修正後は関連テスト + 隣接テストを実行
 - TestContainers 統合テストは Redis が起動していなくても実行可能
@@ -87,3 +91,4 @@ Browser → Nginx(:80) → Spring Boot(:8080) → Redis(:6379)
 - NEVER: `docker compose down -v` を確認なしに実行（データ削除）
 - ALWAYS: 修正前に git ブランチ作成または stash
 - ALWAYS: Dockerfile 変更後はヘルスチェックの動作確認
+- ALWAYS: SecurityConfig のパスマッチャー変更後は E2E Swagger テストを確認（denyAll のため未定義パスは 403）

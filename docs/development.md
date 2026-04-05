@@ -59,6 +59,8 @@ curl http://localhost:8080/health
 # {"status":"UP",...}
 ```
 
+> **グレースフルシャットダウン中:** ヘルスエンドポイントは `{"status":"DEGRADED",...}` を HTTP 503 で返します。ロードバランサーはこのレスポンスでトラフィックを切り離せます。
+
 ### application.yml のローカル上書き
 
 `src/main/resources/application-local.yml` を作成してローカル設定を上書きできます（Git 管理外）。
@@ -87,6 +89,8 @@ npm run dev
 ```
 
 Vite の開発サーバーは `/api` と `/health` へのリクエストを自動的に `http://localhost:8080` にプロキシします（`vite.config.ts` の `server.proxy` 設定）。
+
+`tsconfig.test.json` は `tsconfig.app.json` を extends し、`src/test/` 配下のテストファイルに strict TypeScript チェックを適用します。
 
 ### バックエンド URL を変更する
 
@@ -173,3 +177,5 @@ npm install --prefer-offline
 Redisson 4.x は Jackson 3.x（`tools.jackson.*` パッケージ）を使います。
 `JsonJacksonCodec` など Jackson 2.x を参照するコーデックは使用しないでください。
 詳細は [`MEMORY.md`](.claude/projects/.../memory/MEMORY.md) の「Critical」セクションを参照。
+
+> **備考:** `redisson.yml` は削除済みです。Redis 接続設定は `application.yml` と環境変数（`REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD`）で行います。

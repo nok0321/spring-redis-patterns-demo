@@ -176,60 +176,52 @@ curl http://localhost:8080/actuator/metrics/http.server.requests
 
 ---
 
-## OpenTelemetry Collector（オプション）
+## OpenTelemetry Collector
 
-分散トレーシングを有効にする手順です。
+OTel Collector は `docker-compose.yml` にデフォルトで組み込まれており、追加設定なしで有効です。
+設定ファイルは `docker/otel-collector-config.yaml` です。
 
-### 1. OTel Collector の設定ファイルを作成
-
-```bash
-mkdir -p docker
-cat > docker/otel-collector-config.yaml << 'EOF'
-receivers:
-  otlp:
-    protocols:
-      grpc:
-        endpoint: 0.0.0.0:4317
-
-processors:
-  batch:
-
+```yaml
 exporters:
-  logging:
-    loglevel: info
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  prometheusremotewrite:
+    endpoint: http://prometheus:9090/api/v1/write
+    tls:
+      insecure: true
+  loki:
+    endpoint: http://loki:3100/loki/api/v1/push
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
-      exporters: [logging]
-EOF
+      processors: [memory_limiter, batch]
+      exporters: [otlp/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [prometheusremotewrite]
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [loki]
 ```
 
-### 2. `docker-compose.yml` のコメントを解除
+---
 
-```yaml
-# otel-collector サービスを有効化
-otel-collector:
-  image: otel/opentelemetry-collector-contrib:latest
-  volumes:
-    - ./docker/otel-collector-config.yaml:/etc/otel/config.yaml
-  command: ["--config=/etc/otel/config.yaml"]
-  ports:
-    - "4317:4317"
+## モニタリングスタック
 
-# backend の environment に追加
-backend:
-  environment:
-    - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
-```
+| サービス | URL | 説明 |
+|---------|-----|------|
+| Prometheus | `http://localhost:9090` | メトリクス収集（retention: 7日） |
+| Grafana | `http://localhost:3000` | ダッシュボード（admin / `.env` の `GRAFANA_ADMIN_PASSWORD`） |
+| Jaeger | `http://localhost:16686` | 分散トレーシング（trace永続化済み） |
+| Loki | `http://localhost:3100` | ログ集約 |
 
-### 3. 再起動
-
-```bash
-docker compose up --build -d
-```
+Grafana には Prometheus / Loki / Jaeger の3データソースがプロビジョニング済み。
 
 ---
 
@@ -268,6 +260,16 @@ netstat -ano | findstr :6379
 ports:
   - "8081:8080"  # ← ホスト側を変更
 ```
+
+### Jaeger にトレースが表示されない
+
+Jaeger のトレースデータはボリューム（`jaeger-data`）に永続化されており、コンテナ再起動後も保持されます。
+データをリセットしたい場合は `docker compose down -v` を実行してください（全ボリューム削除）。
+
+### Prometheus のデータ保持期間
+
+Prometheus は明示的に `--storage.tsdb.retention.time=7d` を設定しています。
+7日を超えた古いメトリクスは自動削除されます。
 
 ### ビルドキャッシュの問題
 

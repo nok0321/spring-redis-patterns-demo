@@ -123,7 +123,9 @@ class PubSubServiceTest {
 
 ---
 
-### テストファイル一覧（16 ファイル）
+### テストファイル一覧（16 ファイル・432 テスト）
+
+バックエンドの合計: ユニットテスト 426 件 + 統合テスト（IT）6 件。
 
 | ファイル | 戦略 | テスト対象の主なケース |
 |---------|------|----------------------|
@@ -195,6 +197,12 @@ frontend/coverage/index.html
 
 ---
 
+### TypeScript 設定
+
+`tsconfig.test.json` は `tsconfig.app.json` を extends し、`src/test/` 配下のテストファイルに対して strict TypeScript 型チェックを適用します。これによりテストコード自体の型安全性が保証されます。
+
+---
+
 ### テスト戦略
 
 #### API クライアント — `fetch` モック
@@ -229,7 +237,7 @@ export const handlers = [
 
 #### Hooks — `vi.useFakeTimers()`
 
-`usePolling` のインターバル動作を仮想タイマーで制御します。
+`usePolling` は `setTimeout` re-arm 方式を採用しており、fetch 完了後に次回タイマーをセットします（リクエスト重複防止）。仮想タイマーで順序制御します。
 
 ```typescript
 it('polls at interval', async () => {
@@ -240,7 +248,7 @@ it('polls at interval', async () => {
   expect(fetcher).toHaveBeenCalledTimes(1)  // 初回即時
 
   await act(() => vi.advanceTimersByTimeAsync(5000))
-  expect(fetcher).toHaveBeenCalledTimes(2)  // 2回目
+  expect(fetcher).toHaveBeenCalledTimes(2)  // 2回目（前回 fetch 完了後にセット）
 
   vi.useRealTimers()
 })
@@ -276,7 +284,7 @@ function renderDetailPage(key = 'demo%3Agreeting') {
 
 ---
 
-### テストファイル一覧（15 ファイル・132 テスト）
+### テストファイル一覧（64 ファイル・641 テスト）
 
 | ファイル | テスト数 | 主なテストケース |
 |---------|---------|----------------|
@@ -403,3 +411,9 @@ e2e/
 | ブラウザ | Chromium | Desktop Chrome プロファイル |
 
 失敗時はスクリーンショットとビデオが `playwright-report/` に保存されます。
+
+### CI でのブラウザキャッシュ
+
+CI（GitHub Actions）では `actions/cache@v4` を使って Playwright ブラウザバイナリをキャッシュしています。
+`~/.cache/ms-playwright` をキャッシュキー（`playwright-browsers-<hash of package-lock.json>`）でキャッシュするため、
+依存関係が変わらない限りブラウザの再ダウンロードは発生しません。

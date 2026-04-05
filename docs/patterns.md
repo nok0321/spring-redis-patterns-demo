@@ -100,8 +100,8 @@ resilience4j:
         sliding-window-type: TIME_BASED
         sliding-window-size: 60               # 60秒のスライドウィンドウ
         failure-rate-threshold: 60            # 60% の失敗率で OPEN
-        slow-call-rate-threshold: 80          # 2秒超の呼び出しが 80% で OPEN
-        slow-call-duration-threshold: 2s
+        slow-call-rate-threshold: 80          # 500ms超の呼び出しが 80% で OPEN
+        slow-call-duration-threshold: 500ms
         wait-duration-in-open-state: 30s      # OPEN 継続時間
         permitted-number-of-calls-in-half-open-state: 10
         minimum-number-of-calls: 20           # 最低評価件数
