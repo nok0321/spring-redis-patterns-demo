@@ -2,6 +2,7 @@ import { apiFetch } from './client';
 import type {
   CacheGetResponse, CacheSetRequest, CacheBatchGetResponse,
   CacheBatchSetEntry, CacheDeleteResponse, CacheMetrics,
+  CacheSetResponse, CacheBatchSetResponse, CacheSearchResponse,
 } from '../types/cache';
 
 export const cacheApi = {
@@ -11,7 +12,7 @@ export const cacheApi = {
     ),
 
   set: (key: string, body: CacheSetRequest) =>
-    apiFetch<{ key: string; success: boolean; ttl: string }>(
+    apiFetch<CacheSetResponse>(
       `/api/cache/set/${encodeURIComponent(key)}`,
       { method: 'POST', body: JSON.stringify(body) }
     ),
@@ -22,7 +23,7 @@ export const cacheApi = {
     ),
 
   batchSet: (entries: CacheBatchSetEntry[]) =>
-    apiFetch<{ total: number; successful: number; failed: number }>(
+    apiFetch<CacheBatchSetResponse>(
       '/api/cache/batch',
       { method: 'POST', body: JSON.stringify(entries) }
     ),
@@ -40,7 +41,7 @@ export const cacheApi = {
     ),
 
   searchKeys: (pattern = '*', limit = 100) =>
-    apiFetch<{ pattern: string; limit: number; count: number; keys: string[] }>(
+    apiFetch<CacheSearchResponse>(
       `/api/cache/search?pattern=${encodeURIComponent(pattern)}&limit=${limit}`
     ),
 

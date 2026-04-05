@@ -60,6 +60,8 @@ describe('DashboardPage', () => {
     vi.clearAllMocks()
     mockHealthGet.mockResolvedValue({
       status: 'UP',
+      timestamp: new Date().toISOString(),
+      service: 'redis-app',
       redis: { status: 'UP', initialized: true },
       circuitBreakers: {
         'cache-operations': {
@@ -176,6 +178,8 @@ describe('DashboardPage', () => {
   it('shows DOWN value when redis is down', async () => {
     mockHealthGet.mockResolvedValue({
       status: 'DOWN',
+      timestamp: new Date().toISOString(),
+      service: 'redis-app',
       redis: { status: 'DOWN', initialized: true },
       circuitBreakers: {},
     })
@@ -185,7 +189,7 @@ describe('DashboardPage', () => {
     })
   })
 
-  it('shows N/A when data not yet loaded', () => {
+  it('shows 0% when data not yet loaded', () => {
     // Override with never-resolving promise so initial state stays empty
     mockHealthGet.mockReturnValue(new Promise(() => {}))
     mockCacheMetrics.mockReturnValue(new Promise(() => {}))

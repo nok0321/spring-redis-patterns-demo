@@ -17,6 +17,8 @@ export function useToast() {
     setToasts(prev => [...prev, { id, message, variant }]);
     const timerId = setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
+      // 発火済みの timer ID を配列から除去して unbounded growth を防ぐ
+      timerIdsRef.current = timerIdsRef.current.filter(tid => tid !== timerId);
     }, 3000);
     timerIdsRef.current.push(timerId);
   }, []);

@@ -53,7 +53,7 @@ const mockFloodResult = {
     { workerId: 1, permitted: true, relativeMs: 0 },
     { workerId: 2, permitted: false, relativeMs: 5 },
   ],
-  timestamp: '2026-04-04T00:00:00Z',
+  timestamp: Date.parse('2026-04-04T00:00:00Z'),
 }
 
 function renderPage() {

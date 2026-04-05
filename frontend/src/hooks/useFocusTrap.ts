@@ -1,10 +1,18 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
 const FOCUSABLE_SELECTOR = 'a[href], button:not(:disabled), textarea:not(:disabled), input:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
 export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
   const containerRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<Element | null>(null);
+
+  // onClose を ref で保持することで、呼び出し側がインラインの arrow function を渡しても
+  // useEffect が再実行されない（listener の過剰な登録・削除を防ぐ）。
+  // useLayoutEffect で同期的に更新することで render 外での代入ルールを満たす。
+  const onCloseRef = useRef(onClose);
+  useLayoutEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -22,9 +30,9 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
     }
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && onClose) {
+      if (e.key === 'Escape' && onCloseRef.current) {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -58,7 +66,7 @@ export function useFocusTrap(isOpen: boolean, onClose?: () => void) {
         previousFocusRef.current.focus();
       }
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]); // onClose は ref 経由で参照するため依存配列に含めない
 
   return containerRef;
 }

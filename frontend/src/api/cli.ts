@@ -1,12 +1,7 @@
 import { apiFetch } from './client';
+import type { CliResponse } from '../types/cli';
 
-export interface CliResponse {
-  command: string;
-  result?: string;
-  error?: string;
-  executionMs: number;
-  timestamp: number;
-}
+export type { CliResponse };
 
 export const cliApi = {
   execute: (command: string) =>

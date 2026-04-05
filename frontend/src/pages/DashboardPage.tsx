@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RefreshCw, Activity, Percent, Hash, ShieldCheck } from 'lucide-react';
 import { usePolling } from '../hooks/usePolling';
@@ -14,22 +14,20 @@ export function DashboardPage() {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const navigate = useNavigate();
 
-  const healthFetcher = useCallback(() => healthApi.get(), []);
-  const cacheFetcher = useCallback(() => cacheApi.metrics(), []);
-  const locksFetcher = useCallback(() => locksApi.metrics(), []);
-
+  // usePolling が fetcherRef パターンで参照を安定化するため、
+  // インライン関数を直接渡しても useEffect が再実行されない。
   const { data: health, refetch: refetchHealth } = usePolling({
-    fetcher: healthFetcher,
+    fetcher: () => healthApi.get(),
     interval: 10000,
     enabled: autoRefresh,
   });
   const { data: cache, refetch: refetchCache } = usePolling({
-    fetcher: cacheFetcher,
+    fetcher: () => cacheApi.metrics(),
     interval: 15000,
     enabled: autoRefresh,
   });
   const { data: locks, refetch: refetchLocks } = usePolling({
-    fetcher: locksFetcher,
+    fetcher: () => locksApi.metrics(),
     interval: 15000,
     enabled: autoRefresh,
   });
