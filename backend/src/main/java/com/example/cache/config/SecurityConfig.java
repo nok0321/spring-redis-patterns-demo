@@ -20,7 +20,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/health/**", "/actuator/health/**").permitAll()
                 .requestMatchers("/actuator/**").authenticated()
-                .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/v3/api-docs.yaml").permitAll()
                 .requestMatchers("/api/cache/simulate-error", "/api/cache/reset-circuit-breaker").hasRole("DEMO_ADMIN")
                 .requestMatchers("/api/lock/release").hasRole("DEMO_ADMIN")
                 .requestMatchers("/api/**").authenticated()
