@@ -19,6 +19,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.*;
+import static org.awaitility.Awaitility.await;
 
 @SpringBootTest
 @Testcontainers
@@ -184,7 +185,9 @@ class ResilientCacheServiceIT {
 
         // エラー注入を解除し、HALF_OPEN への遷移を待つ（wait-duration-in-open-state=5s）
         cacheService.setSimulateError(false);
-        Thread.sleep(6_000);
+        await().atMost(Duration.ofSeconds(10))
+               .pollInterval(Duration.ofMillis(500))
+               .until(() -> cb.getState() == CircuitBreaker.State.HALF_OPEN);
 
         assertThat(cb.getState()).isEqualTo(CircuitBreaker.State.HALF_OPEN);
 

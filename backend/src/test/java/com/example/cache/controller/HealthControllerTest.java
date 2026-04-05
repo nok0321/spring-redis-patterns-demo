@@ -77,12 +77,12 @@ class HealthControllerTest {
     }
 
     @Test
-    void health_redissonShutdown_returns200WithNotInitialized() throws Exception {
+    void health_redissonShutdown_returns503WithDegraded() throws Exception {
         when(redissonClient.isShutdown()).thenReturn(true);
 
         mockMvc.perform(get("/health"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.status").value("DEGRADED"))
                 .andExpect(jsonPath("$.redis.initialized").value(false));
     }
 

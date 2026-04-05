@@ -47,8 +47,8 @@ public class HealthController {
 
         if (redissonClient.isShutdown()) {
             health.put("redis", Map.of("initialized", false));
-            health.put("status", "UP");
-            return ResponseEntity.ok(health);
+            health.put("status", "DEGRADED");
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(health);
         }
 
         boolean redisHealthy = checkRedisHealth();

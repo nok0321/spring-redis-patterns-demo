@@ -49,7 +49,7 @@ public class CliController {
     @Operation(summary = "Redis コマンド実行",
         description = """
             ホワイトリストに含まれるコマンドのみ実行可能。
-            読み取り専用: GET / KEYS / SCAN / TTL / PTTL / TYPE / INFO / LLEN / HGETALL / SMEMBERS / ZRANGE / ZCARD / STRLEN / MEMORY / SLOWLOG
+            読み取り専用: GET / SCAN / TTL / PTTL / TYPE / INFO / LLEN / HGETALL / SMEMBERS / ZRANGE / ZCARD / STRLEN / MEMORY / SLOWLOG
             書き込み（demo.features.enabled=true 時のみ）: SET
             """)
     @ApiResponses({
@@ -62,8 +62,9 @@ public class CliController {
     public ResponseEntity<Map<String, Object>> execute(
             @RequestBody Map<String, Object> body) {
 
-        String rawCommand = (String) body.getOrDefault("command", "");
-        if (rawCommand == null || rawCommand.isBlank()) {
+        Object rawObj = body.getOrDefault("command", "");
+        String rawCommand = rawObj instanceof String s ? s : "";
+        if (rawCommand.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of(
                     "error", "コマンドを入力してください",
                     "timestamp", System.currentTimeMillis()));

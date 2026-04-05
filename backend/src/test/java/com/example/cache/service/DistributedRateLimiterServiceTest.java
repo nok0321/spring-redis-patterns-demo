@@ -118,4 +118,16 @@ class DistributedRateLimiterServiceTest {
         assertThatCode(() -> new DistributedRateLimiterService(redissonClient, 50L, 2L))
                 .doesNotThrowAnyException();
     }
+
+    @Test
+    void constructor_trySetRateReturnsFalse_serviceInitializesCorrectly() {
+        // trySetRate returning false (rate limiter already configured) should not prevent startup
+        when(rRateLimiter.trySetRate(any(RateType.class), anyLong(), any(Duration.class)))
+                .thenReturn(false);
+
+        // Construction must succeed even when trySetRate reports that the rate was NOT applied
+        DistributedRateLimiterService newService =
+                new DistributedRateLimiterService(redissonClient, 50L, 2L);
+        assertThat(newService).isNotNull();
+    }
 }

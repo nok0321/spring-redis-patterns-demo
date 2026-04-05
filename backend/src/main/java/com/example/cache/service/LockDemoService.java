@@ -98,7 +98,8 @@ public class LockDemoService {
             done.await(15, TimeUnit.SECONDS);
         }
 
-        int actualFinal  = redissonClient.<Integer>getBucket(DEMO_COUNTER_KEY).get();
+        Integer actualBoxed = redissonClient.<Integer>getBucket(DEMO_COUNTER_KEY).get();
+        int actualFinal  = actualBoxed != null ? actualBoxed : 0;
         int expectedFinal = initialValue - workers;
         int lostUpdates   = actualFinal - expectedFinal; // 正数なら更新が失われた数
 
@@ -173,7 +174,8 @@ public class LockDemoService {
             done.await(30, TimeUnit.SECONDS);
         }
 
-        int actualFinal  = redissonClient.<Integer>getBucket(DEMO_COUNTER_KEY).get();
+        Integer actualBoxed = redissonClient.<Integer>getBucket(DEMO_COUNTER_KEY).get();
+        int actualFinal  = actualBoxed != null ? actualBoxed : 0;
         int expectedFinal = initialValue - workers;
         int lostUpdates   = actualFinal - expectedFinal;
 

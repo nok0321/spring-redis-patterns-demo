@@ -76,7 +76,7 @@ public class CacheController {
     public ResponseEntity<Map<String, Object>> getBatch(
             @RequestParam String keys) {
 
-        if (keys == null || keys.isEmpty()) {
+        if (keys.isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of(
                     "error", "Keys parameter is required",
                     "timestamp", System.currentTimeMillis()));
@@ -207,6 +207,12 @@ public class CacheController {
                     "key", key,
                     "success", success,
                     "ttl", ttl.toString()));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.error("Failed to set key (interrupted): {}", key, e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "error", "Request interrupted",
+                    "timestamp", System.currentTimeMillis()));
         } catch (Exception e) {
             logger.error("Failed to set key: {}", key, e);
             return ResponseEntity.internalServerError().body(Map.of(
@@ -282,6 +288,12 @@ public class CacheController {
                     "total", entries.size(),
                     "successful", successful,
                     "failed", entries.size() - successful));
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.error("Batch set operation interrupted", e);
+            return ResponseEntity.internalServerError().body(Map.of(
+                    "error", "Request interrupted",
+                    "timestamp", System.currentTimeMillis()));
         } catch (Exception e) {
             logger.error("Batch set operation failed", e);
             return ResponseEntity.internalServerError().body(Map.of(
