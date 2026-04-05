@@ -312,10 +312,22 @@ curl http://localhost:8080/health
 }
 ```
 
-| `redis.status` | HTTP ステータス |
-|---------------|--------------|
-| `UP` | 200 |
-| `DOWN` | 503 |
+| `redis.status` / `status` | 意味 | HTTP ステータス |
+|--------------------------|------|--------------|
+| `UP` | 正常 | 200 |
+| `DOWN` | Redis 接続不可 | 503 |
+| `DEGRADED` | Redissonクライアントがシャットダウン中 | 503 |
+
+**DEGRADED レスポンス例:**
+
+```json
+{
+  "timestamp": "2026-04-05T...",
+  "service": "Cache Service",
+  "redis": { "initialized": false },
+  "status": "DEGRADED"
+}
+```
 
 | CB `state` | 意味 |
 |-----------|------|
