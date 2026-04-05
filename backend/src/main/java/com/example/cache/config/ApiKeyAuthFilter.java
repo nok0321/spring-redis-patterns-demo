@@ -28,7 +28,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     public ApiKeyAuthFilter(@Value("${api.key:}") String apiKey) {
         this.apiKey = apiKey;
         if (apiKey.isEmpty()) {
-            log.warn("API_KEY is not configured. All requests will be granted DEMO_ADMIN access. "
+            log.error("API_KEY is not configured. All requests will be granted DEMO_ADMIN access. "
                     + "Set API_KEY environment variable for production use.");
         }
     }

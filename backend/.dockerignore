@@ -2,3 +2,5 @@
 build/
 src/test/
 *.md
+.git/
+.idea/
