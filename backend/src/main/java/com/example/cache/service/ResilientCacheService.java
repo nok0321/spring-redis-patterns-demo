@@ -116,7 +116,7 @@ public class ResilientCacheService {
         Supplier<Optional<T>> redisOperation = () -> getFromRedis(key);
 
         // Decoratorsパターンで複数の回復力パターンを組み合わせ
-        // 実行順序: Retry → CircuitBreaker → 実際のRedis操作
+        // 実行順序（外→内）: Retry → CircuitBreaker → Bulkhead → 実際のRedis操作
         // （レートリミットは上で事前チェック済み）
         Optional<T> result = Decorators.ofSupplier(redisOperation)
                 .withBulkhead(bulkhead) // 並行数制限で Virtual Threads のスレッド爆発を防止
@@ -222,20 +222,21 @@ public class ResilientCacheService {
 
         Map<String, Object> results = new HashMap<>();
 
-        // Step 1: ローカルキャッシュから可能な限り取得
         Set<String> missingKeys = new HashSet<>(keys);
 
-        logger.debug("Redis取得が必要: missing={}",
-                missingKeys.size());
+        logger.debug("Redis取得が必要: keys={}", missingKeys.size());
 
-        // Step 2: 不足分をRedisから取得
+
         Supplier<Map<String, Object>> batchOperation = () -> getBatchFromRedis(missingKeys);
 
         Map<String, Object> redisResults = Decorators.ofSupplier(batchOperation)
                 .withBulkhead(bulkhead)
                 .withCircuitBreaker(circuitBreaker)
                 .withRetry(retry)
-                .withFallback(Arrays.asList(Exception.class), throwable -> {
+                .withFallback(Arrays.asList(
+                        RedisConnectionException.class,
+                        RedisTimeoutException.class,
+                        CallNotPermittedException.class), throwable -> {
                     logger.warn("バッチ操作失敗、部分結果を返却: failed_keys={}",
                             missingKeys.size(), throwable);
                     metrics.recordFallback();
@@ -275,7 +276,10 @@ public class ResilientCacheService {
                 .withBulkhead(bulkhead)
                 .withCircuitBreaker(circuitBreaker)
                 .withRetry(retry)
-                .withFallback(Arrays.asList(Exception.class), throwable -> {
+                .withFallback(Arrays.asList(
+                        RedisConnectionException.class,
+                        RedisTimeoutException.class,
+                        CallNotPermittedException.class), throwable -> {
                     logger.error("Redis削除失敗: key={}", key, throwable);
                     metrics.recordError();
                     return false; // 失敗を明示的に示す
@@ -315,7 +319,10 @@ public class ResilientCacheService {
         Set<String> results = Decorators.ofSupplier(() -> searchKeysInRedis(pattern, limit))
                 .withBulkhead(bulkhead)
                 .withCircuitBreaker(circuitBreaker)
-                .withFallback(Arrays.asList(Exception.class), throwable -> {
+                .withFallback(Arrays.asList(
+                        RedisConnectionException.class,
+                        RedisTimeoutException.class,
+                        CallNotPermittedException.class), throwable -> {
                     logger.warn("キー検索失敗: pattern={}", pattern, throwable);
                     metrics.recordError();
                     return Collections.emptySet();

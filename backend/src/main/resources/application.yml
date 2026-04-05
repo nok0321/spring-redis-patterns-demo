@@ -35,7 +35,7 @@ resilience4j:
         sliding-window-size: 60
         failure-rate-threshold: 60
         slow-call-rate-threshold: 80
-        slow-call-duration-threshold: 2s
+        slow-call-duration-threshold: 500ms
         wait-duration-in-open-state: 30s
         permitted-number-of-calls-in-half-open-state: 10
         minimum-number-of-calls: 20

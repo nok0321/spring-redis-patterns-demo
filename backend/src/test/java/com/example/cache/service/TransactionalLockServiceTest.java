@@ -166,16 +166,17 @@ class TransactionalLockServiceTest {
         }
 
         @Test
-        void lockAcquired_operationThrows_rollbacksAndReturnsEmpty() throws InterruptedException {
+        void lockAcquired_operationThrows_rollbacksAndPropagatesException() throws InterruptedException {
             when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
             when(lock.isHeldByCurrentThread()).thenReturn(true);
             stubCreateTransaction();
             RuntimeException opEx = new RuntimeException("op error");
 
-            Optional<String> result = service.executeWithTransactionalLock("key",
-                    tx -> { throw opEx; });
+            assertThatThrownBy(() ->
+                    service.executeWithTransactionalLock("key", tx -> { throw opEx; }))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessage("op error");
 
-            assertThat(result).isEmpty();
             verify(transaction).rollback();
             verify(lock).unlock();
 
@@ -194,11 +195,27 @@ class TransactionalLockServiceTest {
             doThrow(rollbackEx).when(transaction).rollback();
 
             // The rethrown operation exception has the rollback exception suppressed
-            Optional<String> result = service.executeWithTransactionalLock("key",
-                    tx -> { throw opEx; });
+            assertThatThrownBy(() ->
+                    service.executeWithTransactionalLock("key", tx -> { throw opEx; }))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessage("op error")
+                    .satisfies(ex -> assertThat(ex.getSuppressed())
+                            .hasSize(1)
+                            .allMatch(s -> s.getMessage().equals("rollback error")));
+        }
 
-            // Outer catch captures the rethrown exception -> returns empty
-            assertThat(result).isEmpty();
+        @Test
+        void lockAcquired_operationThrowsRuntimeException_propagatesToCaller()
+                throws InterruptedException {
+            when(lock.tryLock(anyLong(), anyLong(), any(TimeUnit.class))).thenReturn(true);
+            when(lock.isHeldByCurrentThread()).thenReturn(true);
+            stubCreateTransaction();
+            RuntimeException cause = new RuntimeException("operation failure");
+
+            assertThatThrownBy(() ->
+                    service.executeWithTransactionalLock("key", tx -> { throw cause; }))
+                    .isInstanceOf(RuntimeException.class)
+                    .hasMessage("operation failure");
         }
 
         @Test

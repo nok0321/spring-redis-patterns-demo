@@ -246,7 +246,7 @@ public class TransactionalLockService {
             return Optional.empty();
         } catch (Exception e) {
             logger.error("分散ロック付きトランザクション処理エラー: key={}", lockKey, e);
-            return Optional.empty();
+            throw (e instanceof RuntimeException re) ? re : new RuntimeException(e);
         } finally {
             // Step 3: 確実なロック解放（finally句で保証）
             if (lock.isHeldByCurrentThread()) {

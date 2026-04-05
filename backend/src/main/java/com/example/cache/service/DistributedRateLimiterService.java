@@ -37,8 +37,12 @@ public class DistributedRateLimiterService {
             @Value("${ratelimiter.interval:1}") long interval) {
         this.rateLimiter = redissonClient.getRateLimiter("cache-operations");
         try {
-            this.rateLimiter.trySetRate(RateType.OVERALL, rate, Duration.ofSeconds(interval));
-            logger.info("分散レートリミッター初期化完了: rate={}/{}s", rate, interval);
+            boolean rateSet = this.rateLimiter.trySetRate(RateType.OVERALL, rate, Duration.ofSeconds(interval));
+            if (rateSet) {
+                logger.info("分散レートリミッター初期化完了: rate={}/{}s", rate, interval);
+            } else {
+                logger.warn("分散レートリミッター: Redisに既存の設定あり（新設定 rate={}/{}s は適用されず）", rate, interval);
+            }
         } catch (Exception e) {
             logger.warn("分散レートリミッター初期化失敗（Redis未接続の可能性）: {}", e.getMessage());
         }

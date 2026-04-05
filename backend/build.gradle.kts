@@ -33,6 +33,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.testcontainers:testcontainers")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+    testImplementation("org.awaitility:awaitility:4.2.2")
 }
 
 jacoco {
