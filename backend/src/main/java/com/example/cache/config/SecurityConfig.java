@@ -24,7 +24,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/cache/simulate-error", "/api/cache/reset-circuit-breaker").hasRole("DEMO_ADMIN")
                 .requestMatchers("/api/lock/release").hasRole("DEMO_ADMIN")
                 .requestMatchers("/api/**").authenticated()
-                .anyRequest().permitAll()
+                .anyRequest().denyAll()
             )
             .addFilterBefore(apiKeyFilter, UsernamePasswordAuthenticationFilter.class)
             .build();
